@@ -417,7 +417,7 @@ out:
 	return found;
 }
 
-static struct device_monitor * attach_dasd(struct udev_device *dev)
+static void attach_dasd(struct udev_device *dev)
 {
 	struct md_monitor *found_md = NULL;
 	struct device_monitor *tmp, *found = NULL;
@@ -432,7 +432,7 @@ static struct device_monitor * attach_dasd(struct udev_device *dev)
 	if (!dasd_devtype || !strncmp(dasd_devtype, "disk", 4)) {
 		/* Not a partition, ignore */
 		info("%s: not a partition, ignore", devname);
-		return NULL;
+		return;
 	}
 
 	sprintf(devpath, "%s/holders",
@@ -442,7 +442,7 @@ static struct device_monitor * attach_dasd(struct udev_device *dev)
 		/* directory not present, that's okay */
 		dbg("%s: no holders directoy in sysfs, skipping",
 		    devname);
-		return NULL;
+		return;
 	}
 	while ((dirfd = readdir(dirp))) {
 		if (dirfd->d_name[0] == '.')
@@ -486,8 +486,6 @@ static struct device_monitor * attach_dasd(struct udev_device *dev)
 	} else {
 		dbg("%s: no md array found", devname);
 	}
-
-	return found;
 }
 
 static void detach_dasd(struct udev_device *dev)
@@ -558,9 +556,14 @@ enum md_rdev_status md_rdev_check_state(struct device_monitor *dev)
 	char attrpath[256];
 	mdu_disk_info_t info;
 	enum md_rdev_status md_status;
+	const char *sysname;
 
-	sprintf(attrpath, "/dev/%s",
-		udev_device_get_sysname(dev->parent));
+	if (!dev)
+		return REMOVED;
+	sysname = udev_device_get_sysname(dev->parent);
+	if (!sysname)
+		return REMOVED;
+	sprintf(attrpath, "/dev/%s", sysname);
 	ioctl_fd = open(attrpath, O_RDWR|O_NONBLOCK);
 	if (ioctl_fd < 0) {
 		warn("%s: cannot open %s: %d",
@@ -703,6 +706,8 @@ int dasd_set_attribute(struct device_monitor *dev, const char *attr, int value)
 	int rc = 0;
 
 	parent = udev_device_get_parent(dev->device);
+	if (!parent)
+		return 0;
 	sprintf(attrpath, "%s/%s", udev_device_get_syspath(parent), attr);
 	attr_fd = open(attrpath, O_RDWR);
 	if (attr_fd < 0) {
@@ -761,10 +766,14 @@ static void dasd_timeout_ioctl(struct device_monitor *dev, int set)
 	if (dev->fd < 0) {
 		const char *devnode = udev_device_get_devnode(dev->device);
 
-		dev->fd = open(devnode, O_RDONLY);
-		if (dev->fd < 0) {
-			warn("%s: cannot open %s: %d",
-			     dev->dev_name, devnode, errno);
+		if (!devnode) {
+			warn("%s: device removed", dev->dev_name);
+		} else {
+			dev->fd = open(devnode, O_RDONLY);
+			if (dev->fd < 0) {
+				warn("%s: cannot open %s: %d",
+				     dev->dev_name, devnode, errno);
+			}
 		}
 	}
 	if (dev->fd >= 0 && ioctl(dev->fd, ioctl_arg) < 0) {
@@ -788,7 +797,7 @@ static int dasd_setup_aio(struct device_monitor *dev)
 		dev->ioctx = 0;
 		return 1;
 	}
-	if (dev->fd < 0)
+	if (devnode && dev->fd < 0)
 		dev->fd = open(devnode, O_RDONLY);
 	if (dev->fd  < 0) {
 		warn("%s: cannot open %s: %d",
@@ -1127,8 +1136,7 @@ static void monitor_dasd(struct device_monitor *dev)
 static void add_component(struct md_monitor *md, struct device_monitor *dev,
 	const char *md_name)
 {
-	info("Add component %s",
-	     udev_device_get_devpath(dev->device));
+	info("Add component %s", dev->dev_name);
 	if (!dev->parent) {
 		udev_device_ref(md->device);
 		dev->parent = md->device;
@@ -1143,8 +1151,7 @@ static void remove_component(struct device_monitor *dev)
 {
 	pthread_t thread = dev->thread;
 
-	info("Remove component %s",
-	     udev_device_get_devpath(dev->device));
+	info("Remove component %s", dev->dev_name);
 
 	list_del_init(&dev->siblings);
 
