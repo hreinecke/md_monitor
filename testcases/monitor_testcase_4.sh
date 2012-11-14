@@ -6,8 +6,8 @@
 . ./monitor_testcase_functions.sh
 
 MD_NAME="testcase4"
-DEVNOS_LEFT="0.0.5001 0.0.5002"
-DEVNOS_RIGHT="0.0.5003 0.0.5004"
+DEVNOS_LEFT="0.0.0200 0.0.0201 0.0.0202 0.0.0203"
+DEVNOS_RIGHT="0.0.0210 0.0.0211 0.0.0212 0.0.0213"
 MONITOR_TIMEOUT=60
 
 logger "Monitor Testcase 4: Disk detach/attach"

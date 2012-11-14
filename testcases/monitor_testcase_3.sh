@@ -7,8 +7,8 @@
 
 MD_NUM="md1"
 MD_NAME="testcase3"
-DEVNOS_LEFT="0.0.5001 0.0.5002"
-DEVNOS_RIGHT="0.0.5003 0.0.5004"
+DEVNOS_LEFT="0.0.0200 0.0.0201 0.0.0202 0.0.0203"
+DEVNOS_RIGHT="0.0.0210 0.0.0211 0.0.0212 0.0.0213"
 
 logger "Monitor Testcase 3: Disk offline/online"
 
