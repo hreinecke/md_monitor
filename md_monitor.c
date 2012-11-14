@@ -1295,6 +1295,10 @@ static void reset_mirror(struct device_monitor *dev)
 	const char *md_name;
 
 	md_dev = lookup_md(dev->parent);
+	if (!md_dev) {
+		warn("%s: No md device found", dev->dev_name);
+		return;
+	}
 	side = dev->md_slot % (md_dev->layout & 0xFF);
 	md_name = udev_device_get_sysname(md_dev->device);
 	info("%s: reset mirror side %d", md_name, side);
