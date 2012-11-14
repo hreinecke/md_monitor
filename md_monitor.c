@@ -67,6 +67,8 @@
  #endif
 #endif
 
+const char version_str[] = "md_monitor version 4.8";
+
 enum md_rdev_status {
 	UNKNOWN,	/* Not checked */
 	IN_SYNC,	/* device is in sync */
@@ -2517,6 +2519,7 @@ int main(int argc, char *argv[])
 		{ "verbose", no_argument, NULL, 'v' },
 		{ "check-in-sync", no_argument, NULL, 'y' },
 		{ "help", no_argument, NULL, 'h' },
+		{ "version", no_argument, NULL, 'V' },
 		{}
 	};
 
@@ -2530,7 +2533,7 @@ int main(int argc, char *argv[])
 	setup_thread_attr(&cli_attr, 64 * 1024, 0);
 
 	while (1) {
-		option = getopt_long(argc, argv, "ac:de:f:l:mp:r:st:vyh",
+		option = getopt_long(argc, argv, "ac:de:f:l:mp:r:st:vyhV",
 				     options, NULL);
 		if (option == -1) {
 			break;
@@ -2629,6 +2632,9 @@ int main(int argc, char *argv[])
 		case 'y':
 			stop_on_sync = 0;
 			break;
+		case 'V':
+			printf("%s\n", version_str);
+			return 0;
 		case 'h':
 		default:
 			usage();

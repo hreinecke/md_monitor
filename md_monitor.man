@@ -18,6 +18,7 @@ md_monitor \- MD device monitor
 [\fI-v\fR|\fI--verbose\fR]
 [\fI-y\fR|\fI--check-in-sync\fR]
 [\fI-c \fBcmd\fR|\fI--command=\fBcmd\fR]
+[\fI-V\fR|\fI--version\fR]
 [\fI-h\fR|\fI--help\fR]
 .SH DESCRIPTION
 .PP
@@ -75,6 +76,9 @@ Send command \fBcmd\fR to daemon.
 .TP
 \fI-h\fR, \fI--help\fR
 Display md_monitor usage information.
+.TP
+\fI-V\fR, \fI--version\fR
+Display md_monitor version information.
 .SH MD_MONITOR COMMAND MODE
 When specifying \fI--command\fR the \fBmd_monitor\fR program connects to a
 already running \fBmd_monitor\fR program and send a pre-defined
