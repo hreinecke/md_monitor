@@ -311,7 +311,6 @@ static void unlock_device_list(void)
 static void sig_handler(int signum)
 {
 	if (signum == SIGINT || signum == SIGTERM) {
-		info("signal %d received, shutting down", signum);
 		fflush(logfd);
 		udev_exit = 1;
 	}
