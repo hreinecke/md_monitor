@@ -2289,6 +2289,8 @@ struct cli_monitor *monitor_cli(void)
 	return cli;
 }
 
+#define POLL_TIMEOUT 10
+
 int cli_command(char *cmd)
 {
 	struct sockaddr_un sun, local;
@@ -2300,7 +2302,7 @@ int cli_command(char *cmd)
 	struct iovec iov;
 	int cli_sock, feature_on = 1;
 	char buf[CLI_BUFLEN];
-	int buflen;
+	int buflen, i;
 	char status;
 
 	cli_sock = socket(AF_LOCAL, SOCK_DGRAM, 0);
@@ -2356,12 +2358,23 @@ int cli_command(char *cmd)
 		return 5;
 	}
 
-	memset(buf, 0x00, sizeof(buf));
-	iov.iov_base = buf;
-	iov.iov_len = CLI_BUFLEN;
-	buflen = recvmsg(cli_sock, &smsg, 0);
+	while (i < POLL_TIMEOUT) {
+		memset(buf, 0x00, sizeof(buf));
+		iov.iov_base = buf;
+		iov.iov_len = CLI_BUFLEN;
+		buflen = recvmsg(cli_sock, &smsg, MSG_DONTWAIT);
+		if (buflen >= 0 || errno != EAGAIN)
+			break;
+		dbg("No data received, retrying");
+		i++;
+		sleep(1);
+	}
 	if (buflen < 0) {
-		err("recvmsg failed, error %d", errno);
+		if (errno == EAGAIN) {
+			err("recvmsg failed, md_monitor does not respond");
+		} else {
+			err("recvmsg failed, error %d", errno);
+		}
 		status = errno;
 	} else if (buflen < 1) {
 		/* command ok */
