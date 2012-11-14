@@ -1491,6 +1491,7 @@ static void discover_md_components(struct md_monitor *md)
 
 			info("%s: Restart monitoring %s", mdname,
 			     found->md_name);
+			list_move(&found->siblings, &md->children);
 			monitor_dasd(found);
 			continue;
 		}
@@ -2230,9 +2231,15 @@ void *cli_monitor_thread(void *ctx)
 				iov.iov_len = 1;
 			}
 		} else {
-			info("%s: Unhandled event '%s'", mdstr, event);
-			buf[0] = EINVAL;
-			iov.iov_len = 1;
+			if (!strcmp(event, "SpareActive")) {
+				discover_md_components(md_dev);
+				buf[0] = 0;
+				iov.iov_len = 0;
+			} else {
+				info("%s: Unhandled event '%s'", mdstr, event);
+				buf[0] = EINVAL;
+				iov.iov_len = 1;
+			}
 		}
 	send_msg:
 		if (sendmsg(cli->sock, &smsg, 0) < 0)
@@ -2764,17 +2771,22 @@ int main(int argc, char *argv[])
 	info("waiting for events");
 	while (!udev_exit) {
 		int fdcount;
+		struct timeval tmo;
 
 		FD_ZERO(&readfds);
 		FD_SET(monitor_fd, &readfds);
-
+		tmo.tv_sec = 1;
+		tmo.tv_usec = 0;
 		fdcount = select(monitor_fd + 1, &readfds,
-				 NULL, NULL, NULL);
+				 NULL, NULL, &tmo);
 		if (fdcount < 0) {
 			if (errno != EINTR)
 				warn("error receiving uevent message: %m");
 			continue;
 		}
+		/* Timeout, just continue */
+		if (fdcount == 0)
+			continue;
 
 		if (FD_ISSET(monitor_fd, &readfds)) {
 			struct udev_device *device;
