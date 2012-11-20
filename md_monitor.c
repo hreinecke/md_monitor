@@ -2364,7 +2364,7 @@ int cli_command(char *cmd)
 		return 5;
 	}
 
-	while (i < POLL_TIMEOUT) {
+	for (i = 0; i < POLL_TIMEOUT; i++) {
 		memset(buf, 0x00, sizeof(buf));
 		iov.iov_base = buf;
 		iov.iov_len = CLI_BUFLEN;
@@ -2372,7 +2372,6 @@ int cli_command(char *cmd)
 		if (buflen >= 0 || errno != EAGAIN)
 			break;
 		dbg("No data received, retrying");
-		i++;
 		sleep(1);
 	}
 	if (buflen < 0) {
