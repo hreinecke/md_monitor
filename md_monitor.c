@@ -2308,7 +2308,7 @@ int cli_command(char *cmd)
 	struct iovec iov;
 	int cli_sock, feature_on = 1;
 	char buf[CLI_BUFLEN];
-	int buflen, i;
+	int buflen = 0, i;
 	char status;
 
 	cli_sock = socket(AF_LOCAL, SOCK_DGRAM, 0);
