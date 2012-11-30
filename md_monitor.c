@@ -2208,38 +2208,43 @@ void *cli_monitor_thread(void *ctx)
 			devname = NULL;
 		}
 		dev = lookup_md_component(md_dev, devname);
-		if (dev) {
-			if (!strcmp(event, "FailSpare") ||
-			    !strcmp(event, "Fail")) {
+		if (!strcmp(event, "FailSpare") ||
+		    !strcmp(event, "Fail")) {
+			if (dev) {
 				fail_md_component(md_dev, dev);
 				buf[0] = 0;
 				iov.iov_len = 0;
-			} else if (!strcmp(event, "Remove")) {
+			} else {
+				info("%s: No device for event '%s'",
+				     mdstr, event);
+				buf[0] = ENODEV;
+				iov.iov_len = 1;
+			}
+		} else if (!strcmp(event, "Remove")) {
+			if (dev) {
 				remove_md_component(md_dev, dev);
 				pthread_mutex_lock(&md_dev->lock);
 				remove_component(dev);
 				pthread_mutex_unlock(&md_dev->lock);
 				buf[0] = 0;
 				iov.iov_len = 0;
-			} else if (!strcmp(event, "SpareActive")) {
+			} else {
+				info("%s: No device for event '%s'",
+				     mdstr, event);
+				buf[0] = ENODEV;
+				iov.iov_len = 1;
+			}
+		} else if (!strcmp(event, "SpareActive")) {
+			if (dev)
 				sync_md_component(md_dev, dev);
-				buf[0] = 0;
-				iov.iov_len = 0;
-			} else {
-				info("%s: Unhandled event '%s'", mdstr, event);
-				buf[0] = EINVAL;
-				iov.iov_len = 1;
-			}
-		} else {
-			if (!strcmp(event, "SpareActive")) {
+			else
 				discover_md_components(md_dev);
-				buf[0] = 0;
-				iov.iov_len = 0;
-			} else {
-				info("%s: Unhandled event '%s'", mdstr, event);
-				buf[0] = EINVAL;
-				iov.iov_len = 1;
-			}
+			buf[0] = 0;
+			iov.iov_len = 0;
+		} else {
+			info("%s: Unhandled event '%s'", mdstr, event);
+			buf[0] = EINVAL;
+			iov.iov_len = 1;
 		}
 	send_msg:
 		if (sendmsg(cli->sock, &smsg, 0) < 0)
