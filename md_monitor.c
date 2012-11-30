@@ -592,8 +592,9 @@ enum md_rdev_status md_rdev_check_state(struct device_monitor *dev)
 	else
 		md_status = SPARE;
 
-	info("%s: MD rdev state %s (%x)",
-	     dev->dev_name, md_rdev_print_state(md_status), info.state);
+	info("%s: MD rdev (%d/%d) state %s (%x)",
+	     dev->dev_name, dev->md_index, dev->md_slot,
+	     md_rdev_print_state(md_status), info.state);
 
 	return md_status;
 }
@@ -1137,7 +1138,8 @@ static void monitor_dasd(struct device_monitor *dev)
 static void add_component(struct md_monitor *md, struct device_monitor *dev,
 	const char *md_name)
 {
-	info("Add component %s", dev->dev_name);
+	info("%s: Add component (%d/%d)", dev->dev_name,
+	     dev->md_index, dev->md_slot);
 	if (!dev->parent) {
 		udev_device_ref(md->device);
 		dev->parent = md->device;
@@ -1152,7 +1154,8 @@ static void remove_component(struct device_monitor *dev)
 {
 	pthread_t thread = dev->thread;
 
-	info("Remove component %s", dev->dev_name);
+	info("%s: Remove component (%d/%d)",
+	     dev->dev_name, dev->md_index, dev->md_slot);
 
 	list_del_init(&dev->siblings);
 
