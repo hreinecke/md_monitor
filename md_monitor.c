@@ -455,7 +455,7 @@ static void attach_dasd(struct udev_device *dev)
 	closedir(dirp);
 	lock_device_list();
 	list_for_each_entry(tmp, &device_list, entry) {
-		if (!strcmp(tmp->md_name, devname)) {
+		if (!strcmp(tmp->dev_name, devname)) {
 			found = tmp;
 			break;
 		}
