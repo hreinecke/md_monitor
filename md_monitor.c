@@ -551,6 +551,60 @@ static void discover_dasd(struct udev *udev)
 	udev_enumerate_unref(dasd_enumerate);
 }
 
+int md_rdev_update_index(struct md_monitor *md_dev, struct device_monitor *dev)
+{
+	const char *md_name = udev_device_get_sysname(md_dev->device);
+	char devpath[256];
+	char attrpath[256];
+	char attrvalue[256];
+	struct stat stbuf;
+	DIR *dirp;
+	struct dirent *dirfd;
+	char *eptr;
+	int index = -1;
+
+	sprintf(devpath, "%s/md",
+		udev_device_get_syspath(md_dev->device));
+	dirp = opendir(devpath);
+	if (!dirp) {
+		/* directory not present */
+		return errno;
+	}
+	while ((dirfd = readdir(dirp))) {
+		if (!strncmp(dirfd->d_name, "rd", 2)) {
+			index = strtoul(dirfd->d_name + 2, &eptr, 10);
+			if (dirfd->d_name + 2 == eptr) {
+				dbg("%s: couldn't parse '%s'", md_name,
+				    dirfd->d_name);
+				continue;
+			}
+			sprintf(attrpath, "%s/%s", devpath, dirfd->d_name);
+			if (stat(attrpath, &stbuf) < 0) {
+				dbg("%s: failed to stat %s, error %d",
+				    md_name, attrpath, errno);
+				continue;
+			}
+			if (!S_ISLNK(stbuf.st_mode))
+				continue;
+			if (readlink(attrpath, attrvalue, 256) < 0) {
+				dbg("%s: failed to read symlink '%s', error %d",
+				    md_name, attrpath, errno);
+				continue;
+			}
+			if (strncmp(attrvalue, "dev-", 4)) {
+				dbg("%s: invalid symlink value '%s'",
+				    md_name, attrvalue);
+				continue;
+			}
+			if (!strcmp(attrvalue + 4, dev->dev_name)) {
+				dev->md_index = index;
+			}
+		}
+	}
+	closedir(dirp);
+	return 0;
+}
+
 enum md_rdev_status md_rdev_check_state(struct device_monitor *dev)
 {
 	int ioctl_fd;
@@ -592,6 +646,7 @@ enum md_rdev_status md_rdev_check_state(struct device_monitor *dev)
 	else
 		md_status = SPARE;
 
+	dev->md_slot = info.raid_disk;
 	info("%s: MD rdev (%d/%d) state %s (%x)",
 	     dev->dev_name, dev->md_index, dev->md_slot,
 	     md_rdev_print_state(md_status), info.state);
@@ -1391,6 +1446,7 @@ static void sync_md_component(struct md_monitor *md_dev,
 	}
 	info("%s: setting '%s' to IN_SYNC",
 	     md_name, dev->dev_name);
+	md_rdev_update_index(md_dev, dev);
 	/*
 	 * Not using md_rdev_update_state here;
 	 * IN_SYNC should override previous state.
