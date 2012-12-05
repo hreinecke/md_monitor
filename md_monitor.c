@@ -467,6 +467,7 @@ static void attach_dasd(struct udev_device *dev)
 		memset(found, 0, sizeof(struct device_monitor));
 		found->device = udev_device_get_parent(dev);
 		found->md_slot = -1;
+		found->md_index = -1;
 		found->io_status = IO_UNKNOWN;
 		pthread_mutex_init(&found->lock, NULL);
 		INIT_LIST_HEAD(&found->siblings);
@@ -557,7 +558,6 @@ int md_rdev_update_index(struct md_monitor *md_dev, struct device_monitor *dev)
 	char devpath[256];
 	char attrpath[256];
 	char attrvalue[256];
-	struct stat stbuf;
 	DIR *dirp;
 	struct dirent *dirfd;
 	char *eptr;
@@ -579,15 +579,8 @@ int md_rdev_update_index(struct md_monitor *md_dev, struct device_monitor *dev)
 				continue;
 			}
 			sprintf(attrpath, "%s/%s", devpath, dirfd->d_name);
-			if (stat(attrpath, &stbuf) < 0) {
-				dbg("%s: failed to stat %s, error %d",
-				    md_name, attrpath, errno);
-				continue;
-			}
-			if (!S_ISLNK(stbuf.st_mode))
-				continue;
 			if (readlink(attrpath, attrvalue, 256) < 0) {
-				dbg("%s: failed to read symlink '%s', error %d",
+				dbg("%s: cannot read symlink '%s', error %d",
 				    md_name, attrpath, errno);
 				continue;
 			}
@@ -597,6 +590,9 @@ int md_rdev_update_index(struct md_monitor *md_dev, struct device_monitor *dev)
 				continue;
 			}
 			if (!strcmp(attrvalue + 4, dev->dev_name)) {
+				dbg("%s: update index for dev '%s': %d -> %d",
+				    md_name, dev->dev_name,
+				    dev->md_index, index);
 				dev->md_index = index;
 			}
 		}
@@ -1506,6 +1502,10 @@ static void discover_md_components(struct md_monitor *md)
 	INIT_LIST_HEAD(&update_list);
 	pthread_mutex_lock(&md->lock);
 	list_splice_init(&md->children, &update_list);
+	/* Reindex existing devices */
+	list_for_each_entry(tmp, &update_list, siblings) {
+		md_rdev_update_index(md, tmp);
+	}
 	for (i = 0; i < 4096; i++) {
 		info.number = i;
 		if (ioctl(ioctl_fd, GET_DISK_INFO, &info) < 0) {
