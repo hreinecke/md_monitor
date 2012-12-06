@@ -552,55 +552,6 @@ static void discover_dasd(struct udev *udev)
 	udev_enumerate_unref(dasd_enumerate);
 }
 
-int md_rdev_update_index(struct md_monitor *md_dev, struct device_monitor *dev)
-{
-	const char *md_name = udev_device_get_sysname(md_dev->device);
-	char devpath[256];
-	char attrpath[256];
-	char attrvalue[256];
-	DIR *dirp;
-	struct dirent *dirfd;
-	char *eptr;
-	int index = -1;
-
-	sprintf(devpath, "%s/md",
-		udev_device_get_syspath(md_dev->device));
-	dirp = opendir(devpath);
-	if (!dirp) {
-		/* directory not present */
-		return errno;
-	}
-	while ((dirfd = readdir(dirp))) {
-		if (!strncmp(dirfd->d_name, "rd", 2)) {
-			index = strtoul(dirfd->d_name + 2, &eptr, 10);
-			if (dirfd->d_name + 2 == eptr) {
-				dbg("%s: couldn't parse '%s'", md_name,
-				    dirfd->d_name);
-				continue;
-			}
-			sprintf(attrpath, "%s/%s", devpath, dirfd->d_name);
-			if (readlink(attrpath, attrvalue, 256) < 0) {
-				dbg("%s: cannot read symlink '%s', error %d",
-				    md_name, attrpath, errno);
-				continue;
-			}
-			if (strncmp(attrvalue, "dev-", 4)) {
-				dbg("%s: invalid symlink value '%s'",
-				    md_name, attrvalue);
-				continue;
-			}
-			if (!strcmp(attrvalue + 4, dev->dev_name)) {
-				dbg("%s: update index for dev '%s': %d -> %d",
-				    md_name, dev->dev_name,
-				    dev->md_index, index);
-				dev->md_index = index;
-			}
-		}
-	}
-	closedir(dirp);
-	return 0;
-}
-
 enum md_rdev_status md_rdev_check_state(struct device_monitor *dev)
 {
 	int ioctl_fd;
@@ -1442,7 +1393,6 @@ static void sync_md_component(struct md_monitor *md_dev,
 	}
 	info("%s: setting '%s' to IN_SYNC",
 	     md_name, dev->dev_name);
-	md_rdev_update_index(md_dev, dev);
 	/*
 	 * Not using md_rdev_update_state here;
 	 * IN_SYNC should override previous state.
@@ -1502,10 +1452,6 @@ static void discover_md_components(struct md_monitor *md)
 	INIT_LIST_HEAD(&update_list);
 	pthread_mutex_lock(&md->lock);
 	list_splice_init(&md->children, &update_list);
-	/* Reindex existing devices */
-	list_for_each_entry(tmp, &update_list, siblings) {
-		md_rdev_update_index(md, tmp);
-	}
 	for (i = 0; i < 4096; i++) {
 		info.number = i;
 		if (ioctl(ioctl_fd, GET_DISK_INFO, &info) < 0) {
@@ -1552,6 +1498,7 @@ static void discover_md_components(struct md_monitor *md)
 			     found->md_name);
 			list_move(&found->siblings, &md->children);
 			monitor_dasd(found);
+			found = NULL;
 			continue;
 		}
 		/* Start monitoring a new device */
@@ -1580,6 +1527,7 @@ static void discover_md_components(struct md_monitor *md)
 		udev_device_unref(raid_dev);
 		list_add(&found->siblings, &md->children);
 		monitor_dasd(found);
+		found = NULL;
 	}
 	pthread_mutex_unlock(&md->lock);
 	/* Cleanup stale devices */
@@ -1923,7 +1871,11 @@ static void handle_event(struct udev_device *device)
 
 	if (!devname || !action)
 		return;
-	if (!strcmp(action, "change")) {
+	if (!strcmp(action, "add")) {
+		if (!strncmp(devname, "dasd", 4)) {
+			attach_dasd(device);
+		}
+	} else if (!strcmp(action, "change")) {
 		if (!strncmp(devname, "md", 2)) {
 			monitor_md(device);
 		}
