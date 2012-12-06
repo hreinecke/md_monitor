@@ -279,6 +279,7 @@ static int fail_component(struct md_monitor *, struct device_monitor *,
 static void reset_component(struct device_monitor *);
 static void fail_mirror(struct device_monitor *, enum md_rdev_status);
 static void reset_mirror(struct device_monitor *);
+static void discover_md_components(struct md_monitor *md);
 static void remove_md_component(struct md_monitor *md_dev,
 				struct device_monitor *dev);
 static int dasd_set_attribute(struct device_monitor *dev, const char *attr,
@@ -1399,6 +1400,8 @@ static void sync_md_component(struct md_monitor *md_dev,
 	 */
 	dev->md_status = IN_SYNC;
 	pthread_mutex_unlock(&dev->lock);
+	if (dev->md_index < 0)
+		discover_md_components(md_dev);
 	monitor_dasd(dev);
 }
 
