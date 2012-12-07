@@ -552,6 +552,72 @@ static void discover_dasd(struct udev *udev)
 	udev_enumerate_unref(dasd_enumerate);
 }
 
+static void md_rdev_update_index(struct md_monitor *md,
+				 struct device_monitor *dev)
+{
+	const char *mdname = udev_device_get_sysname(md->device);
+	int ioctl_fd, i, offset = 0;
+	mdu_disk_info_t info;
+	char mdpath[256];
+	dev_t raid_devt, mon_devt, tmp_devt;
+
+	if (!mdname) {
+		dbg("No MD array found");
+		return;
+	}
+
+	sprintf(mdpath, "/dev/%s", mdname);
+	ioctl_fd = open(mdpath, O_RDWR|O_NONBLOCK);
+	if (ioctl_fd < 0) {
+		warn("%s: Couldn't open %s: %d",
+		     mdname, mdpath, errno);
+		return;
+	}
+	for (i = 0; i < 4096; i++) {
+		info.number = i;
+		if (ioctl(ioctl_fd, GET_DISK_INFO, &info) < 0) {
+			warn("%s: ioctl GET_DISK_INFO for disk %d failed, "
+			     "error %d", mdname, i, errno);
+			continue;
+		}
+		if (info.major == 0 && info.minor == 0)
+			continue;
+
+		/*
+		 * Magic:
+		 * We have to figure out the minor number of the
+		 * corresponding block device.
+		 * For DASD it's major 94 with pitch 4
+		 * For SCSI it's major 8,
+		 * 65, 66, 67, 68, 69, 70, 71,
+		 * 128, 129, 130, 131, 132, 133, 134, 135
+		 * with pitch 16
+		 */
+		raid_devt = makedev(info.major, info.minor);
+		if (info.major == 94) {
+			offset = info.minor % 4;
+		} else if (info.major == 8 ||
+			   (info.major > 64 && info.major < 72) ||
+			   (info.major > 127 && info.major < 136)) {
+			offset = info.minor % 16;
+		}
+		mon_devt = makedev(info.major, info.minor - offset);
+		tmp_devt = udev_device_get_devnum(dev->device);
+		if (tmp_devt == mon_devt) {
+			if (!dev->parent)
+				dev->parent = md->device;
+
+			dev->md_index = i;
+			dev->md_slot = info.raid_disk;
+			info("%s: update index on %s (%d/%d)", mdname,
+			     dev->md_name, dev->md_index, dev->md_slot);
+			monitor_dasd(dev);
+			break;
+		}
+	}
+	close(ioctl_fd);
+}
+
 enum md_rdev_status md_rdev_check_state(struct device_monitor *dev)
 {
 	int ioctl_fd;
@@ -1147,6 +1213,8 @@ static void add_component(struct md_monitor *md, struct device_monitor *dev,
 		dev->parent = md->device;
 	}
 	strncpy(dev->md_name, md_name, strlen(md_name));
+	if (dev->md_index < 0)
+		md_rdev_update_index(md, dev);
 	dasd_set_attribute(dev, "failfast", 1);
 	dasd_set_attribute(dev, "failfast_retries", failfast_retries);
 	dasd_set_attribute(dev, "failfast_expires", failfast_timeout);
