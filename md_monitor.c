@@ -1400,8 +1400,6 @@ static void sync_md_component(struct md_monitor *md_dev,
 	 */
 	dev->md_status = IN_SYNC;
 	pthread_mutex_unlock(&dev->lock);
-	if (dev->md_index < 0)
-		discover_md_components(md_dev);
 	monitor_dasd(dev);
 }
 
@@ -1441,8 +1439,10 @@ static void discover_md_components(struct md_monitor *md)
 	struct udev_device *raid_dev;
 	struct list_head update_list;
 
-	if (!mdname)
+	if (!mdname) {
+		dbg("No MD array found");
 		return;
+	}
 
 	sprintf(mdpath, "/dev/%s", mdname);
 	ioctl_fd = open(mdpath, O_RDWR|O_NONBLOCK);
@@ -2153,6 +2153,7 @@ void *cli_monitor_thread(void *ctx)
 		if (!strcmp(event, "RebuildStarted")) {
 			info("%s: Rebuild started",
 			     udev_device_get_sysname(md_dev->device));
+			discover_md_components(md_dev);
 			md_dev->in_recovery = 1;
 			buf[0] = 0;
 			iov.iov_len = 0;
