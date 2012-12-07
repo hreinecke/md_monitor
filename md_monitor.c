@@ -1499,6 +1499,9 @@ static void discover_md_components(struct md_monitor *md)
 
 			info("%s: Restart monitoring %s", mdname,
 			     found->md_name);
+			/* Be on the safe side and update indices */
+			found->md_index = i;
+			found->md_slot = info.raid_disk;
 			list_move(&found->siblings, &md->children);
 			monitor_dasd(found);
 			found = NULL;
