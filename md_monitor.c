@@ -133,7 +133,6 @@ struct device_monitor {
 	enum dasd_io_status io_status;
 	int md_index;
 	int md_slot;
-	dev_t md_devt;
 	int fd;
 	int running;
 	int aio_active;
@@ -1524,7 +1523,6 @@ static void discover_md_components(struct md_monitor *md)
 		}
 		found->md_index = i;
 		found->md_slot = info.raid_disk;
-		found->md_devt = raid_devt;
 		udev = udev_device_get_udev(md->device);
 		raid_dev = udev_device_new_from_devnum(udev, 'b', raid_devt);
 		info("%s: Start monitoring %s", mdname,
