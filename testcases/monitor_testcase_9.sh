@@ -53,9 +53,14 @@ echo "Monitor status: $md_status"
 mdadm --wait /dev/${MD_NUM}
 echo "Add new device on left side"
 for d in ${DEVICES_LEFT[3]} ; do
-    if ! mdadm --zero-superblock --force $d ; then
-	error_exit "Cannot zero superblock on $d"
+    if ! dasdfmt -p -y -b 4096 -f ${d%1} ; then
+	error_exit "Cannot format device ${d%1}"
     fi
+    sleep 2
+    if ! fdasd -a ${d%1} ; then
+	error_exit "Cannot partition device ${d%1}"
+    fi
+    sleep 2
     if ! mdadm --manage /dev/${MD_NUM} --add --failfast $d ; then
 	error_exit "Cannot add $d to MD array $MD_NUM"
     fi

@@ -22,7 +22,6 @@ function error_exit() {
     local errst=$1
 
     echo $errstr
-    kill -TERM $MONITOR_PID
     if [ "$MDADM_PID" ] ; then
 	kill -TERM $MDADM_PID
     fi
@@ -85,6 +84,7 @@ function start_md() {
     fi
     if [ -n "$trapcmd" ] ; then
 	trap "$trapcmd" EXIT
+	MDADM_PID=
     fi
     iostat -kt 1 > /tmp/monitor_${MD_NAME}_iostat.log 2>&1 &
 }
