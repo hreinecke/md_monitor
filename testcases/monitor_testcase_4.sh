@@ -5,9 +5,10 @@
 
 . ./monitor_testcase_functions.sh
 
+MD_NUM="md1"
 MD_NAME="testcase4"
-DEVNOS_LEFT="0.0.0200 0.0.0201 0.0.0202 0.0.0203"
-DEVNOS_RIGHT="0.0.0210 0.0.0211 0.0.0212 0.0.0213"
+DEVNOS_LEFT="0.0.0210 0.0.0211 0.0.0212 0.0.0213"
+DEVNOS_RIGHT="0.0.0220 0.0.0221 0.0.0222 0.0.0223"
 MONITOR_TIMEOUT=60
 
 logger "Monitor Testcase 4: Disk detach/attach"
@@ -21,17 +22,15 @@ clear_metadata
 modprobe vmcp
 
 ulimit -c unlimited
-start_md ${MD_NAME}
-MD_NUM=$(readlink /dev/md/${MD_NAME})
-MD_NUM=${MD_NUM##*/}
+start_md ${MD_NUM}
 
 echo "$(date) Create filesystem ..."
-if ! mkfs.ext3 /dev/md/${MD_NAME} ; then
+if ! mkfs.ext3 /dev/${MD_NUM} ; then
     error_exit "Cannot create fs"
 fi
 
 echo "$(date) Mount filesystem ..."
-if ! mount /dev/md/${MD_NAME} /mnt ; then
+if ! mount /dev/${MD_NUM} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
 
@@ -70,7 +69,7 @@ mdadm --detail /dev/${MD_NUM}
 
 echo "$(date) Re-attach disk on first half ..."
 for devno in $DEVNOS_LEFT ; do
-    vmcp attach ${devno##*.} \*
+    vmcp link \* ${devno##*.} ${devno##*.}
     break
 done
 
@@ -106,7 +105,7 @@ killall -KILL dt 2> /dev/null
 echo "$(date) Wait for sync"
 wait_for_sync ${MD_NUM}
 
-mdadm --detail /dev/md/${MD_NAME}
+mdadm --detail /dev/${MD_NUM}
 
 if [ "$detach_other_half" ] ; then
     echo "Detach disk on second half ..."
@@ -139,12 +138,12 @@ if [ "$detach_other_half" ] ; then
     ls /mnt
     echo "Re-attach disk on second half ..."
     for devno in $DEVNOS_RIGHT ; do
-	vmcp attach ${devno##*.} \*
+	vmcp link \* ${devno##*.} ${devno##*.}
 	break;
     done
 
     echo "Ok. Waiting for MD to pick up changes ..."
-# Wait for md_monitor to pick up changes
+    # Wait for md_monitor to pick up changes
     sleeptime=0
     num=${#DASDS_LEFT[@]}
     while [ $num -gt 0  ] ; do
@@ -167,7 +166,7 @@ if [ "$detach_other_half" ] ; then
     fi
     
     wait_for_sync ${MD_NUM}
-    mdadm --detail /dev/md/${MD_NAME}
+    mdadm --detail /dev/${MD_NUM}
 fi
 
 echo "$(date) Umount filesystem ..."
