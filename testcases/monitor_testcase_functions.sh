@@ -94,10 +94,6 @@ function stop_md() {
     local cur_md=$1
     local MD_NAME
 
-    if jobs | grep -q iostat ; then
-	kill -TERM $(jobs -p)
-    fi
-
     MD_NAME=$(mdadm --detail /dev/${cur_md} | sed -n 's/ *Name : [^:]*:\([^ ]*\) (local .*)/\1/p')
     if [ -z "$MD_NAME" ] ; then
 	MD_NAME="testcase"
