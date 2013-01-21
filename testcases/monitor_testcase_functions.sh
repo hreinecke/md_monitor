@@ -260,24 +260,7 @@ function wait_for_sync () {
       echo "ERROR: recovery didn't start after $MONITORTIMEOUT seconds"
       return 1
   fi
-  while [ "$resync_time" ] ; do
-      # MD time calculation is fluctuating, better use 1/10 of the
-      # estimated time to get a better result
-      resync_time=$(( ${resync_time%.*} * 6 ))
-      if [ $resync_time -gt 30 ] ; then
-	  resync_time=30
-      elif [ $resync_time -le 0 ] ; then
-	  resync_time=1
-      fi
-      sleep $resync_time
-      resync_time=$(sed -n 's/.* finish=\(.*\)min speed.*/\1/p' /proc/mdstat)
-      if [ -z "$resync_time" ] ; then
-	  # We might've been unlucky and hit the window between switching
-	  # recovery strategies. So re-check to get an accurate result
-	  sleep 1
-	  resync_time=$(sed -n 's/.* finish=\(.*\)min speed.*/\1/p' /proc/mdstat)
-      fi
-  done
+  mdadm --wait /dev/$MD
 
   if [ "$action" != "reshape" ] ; then
       # Reset sync speed
@@ -292,6 +275,7 @@ function wait_for_sync () {
   working_disks=${raid_status#*/}
   if [ $raid_disks -ne $working_disks ] ; then
       echo "ERROR: mirror $MD degraded after recovery"
+      mdadm --detail /dev/$MD
       return 1;
   fi
   if [ "$wait_for_bitmap" ] ; then

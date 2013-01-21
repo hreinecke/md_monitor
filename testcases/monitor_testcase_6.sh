@@ -20,10 +20,7 @@ activate_dasds
 clear_metadata
 
 ulimit -c unlimited
-start_md $MD_NAME
-
-MD_NUM=$(readlink /dev/md/${MD_NAME})
-MD_NUM=${MD_NUM##*/}
+start_md $MD_NUM
 
 echo "$(date) Create filesystem ..."
 if ! mkfs.ext3 /dev/${MD_NUM} ; then
@@ -104,11 +101,16 @@ while [ $num -gt 0  ] ; do
 	fi
     done
     [ $num -eq 0 ] && break
+    [ $sleeptime -gt 60 ] && break
     num=${#DASDS_LEFT[@]}
     sleep 1
     (( sleeptime ++ ))
 done
-echo "$(date) MD monitor picked up changes after $sleeptime seconds"
+if [ $num -eq 0 ] ; then
+    echo "$(date) MD monitor picked up changes after $sleeptime seconds"
+else
+    echo "$(date) MD monitor did not pick up changes after $sleeptime seconds"
+fi
 
 echo "$(date) MD status"
 mdadm --detail /dev/${MD_NUM}
