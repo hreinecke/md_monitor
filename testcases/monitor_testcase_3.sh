@@ -7,8 +7,8 @@
 
 MD_NUM="md1"
 MD_NAME="testcase3"
-DEVNOS_LEFT="0.0.0200 0.0.0201 0.0.0202 0.0.0203"
-DEVNOS_RIGHT="0.0.0210 0.0.0211 0.0.0212 0.0.0213"
+DEVNOS_LEFT="0.0.0210 0.0.0211 0.0.0212 0.0.0213"
+DEVNOS_RIGHT="0.0.0220 0.0.0221 0.0.0222 0.0.0223"
 
 logger "Monitor Testcase 3: Disk offline/online"
 
@@ -19,10 +19,7 @@ activate_dasds
 clear_metadata
 
 ulimit -c unlimited
-start_md ${MD_NAME}
-
-MD_NUM=$(readlink /dev/md/${MD_NAME})
-MD_NUM=${MD_NUM##*/}
+start_md ${MD_NUM}
 
 echo "Create filesystem ..."
 if ! mkfs.ext3 /dev/${MD_NUM} ; then
@@ -39,7 +36,7 @@ dd if=/dev/zero of=/mnt/testfile1 bs=4096 count=1024
 
 echo "Shutting down first half ..."
 for d in ${DEVICES_LEFT[@]} ; do
-    ./md_monitor -c "Remove:/dev/${MD_NUM}@$d"
+    md_monitor -c "Remove:/dev/${MD_NUM}@$d"
 done
 if ! mdadm --manage /dev/${MD_NUM} --fail ${DEVICES_LEFT[@]} ; then
     error_exit "Cannot fail first half in MD array $MD_NUM"
@@ -70,7 +67,7 @@ mdadm --detail /dev/${MD_NUM}
 
 echo "Shutting down second half ..."
 for d in ${DEVICES_RIGHT[@]} ; do
-    ./md_monitor -c "Remove:/dev/${MD_NUM}@$d"
+    md_monitor -c "Remove:/dev/${MD_NUM}@$d"
 done
 if ! mdadm --manage /dev/${MD_NUM} --fail ${DEVICES_RIGHT[@]} ; then
     error_exit "Cannot fail $d in MD array $MD_NUM"
