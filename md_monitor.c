@@ -1608,12 +1608,17 @@ static void discover_md_components(struct md_monitor *md)
 		found = NULL;
 	}
 	pthread_mutex_unlock(&md->lock);
-	/* Cleanup stale devices */
-	list_for_each_entry_safe(found, tmp, &update_list, siblings) {
-		info("%s: Remove stale device",
-		     found->dev_name);
-		remove_md_component(md, found);
-		remove_component(found);
+	if (!md->in_recovery) {
+		/* Cleanup stale devices */
+		list_for_each_entry_safe(found, tmp, &update_list, siblings) {
+			info("%s: Remove stale device",
+			     found->dev_name);
+			remove_md_component(md, found);
+			remove_component(found);
+		}
+	} else {
+		info("%s: skip stale device detection, array in recovery",
+		     mdname);
 	}
 	close(ioctl_fd);
 }
