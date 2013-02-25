@@ -659,7 +659,8 @@ enum md_rdev_status md_rdev_check_state(struct device_monitor *dev)
 	else
 		md_status = SPARE;
 
-	dev->md_slot = info.raid_disk;
+	if (info.raid_disk != -1)
+		dev->md_slot = info.raid_disk;
 	info("%s: MD rdev (%d/%d) state %s (%x)",
 	     dev->dev_name, dev->md_index, dev->md_slot,
 	     md_rdev_print_state(md_status), info.state);
@@ -1378,6 +1379,11 @@ static void reset_mirror(struct device_monitor *dev)
 	md_dev = lookup_md(dev->parent);
 	if (!md_dev) {
 		warn("%s: No md device found", dev->dev_name);
+		return;
+	}
+	if (dev->md_slot == -1) {
+		info("%s: device removed, no slot information",
+		     dev->dev_name);
 		return;
 	}
 	side = dev->md_slot % (md_dev->layout & 0xFF);
