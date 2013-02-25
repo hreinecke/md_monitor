@@ -2,6 +2,9 @@
 #
 # Testcase 5: Successive Disk attach/detach
 #
+# This testcase does not work.
+# I have to check with Neil Brown if it even
+# is a valid testcase.
 
 . ./monitor_testcase_functions.sh
 
