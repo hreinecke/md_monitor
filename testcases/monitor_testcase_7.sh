@@ -7,8 +7,8 @@
 
 MD_NUM="md1"
 MD_NAME="testcase7"
-DEVNOS_LEFT="0.0.0200 0.0.0201 0.0.0202"
-DEVNOS_RIGHT="0.0.0210 0.0.0211 0.0.0212"
+DEVNOS_LEFT="0.0.0210 0.0.0211 0.0.0212"
+DEVNOS_RIGHT="0.0.0220 0.0.0221 0.0.0222"
 
 logger "Monitor Testcase 7: expand RAID"
 
@@ -19,7 +19,7 @@ activate_dasds
 clear_metadata
 
 ulimit -c unlimited
-start_md $MD_NUM $MD_NAME 4
+start_md $MD_NUM 4
 
 echo "Create filesystem ..."
 if ! mkfs.ext3 /dev/${MD_NUM} ; then
