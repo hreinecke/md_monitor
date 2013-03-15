@@ -608,7 +608,8 @@ static void md_rdev_update_index(struct md_monitor *md,
 				dev->parent = md->device;
 
 			dev->md_index = i;
-			dev->md_slot = info.raid_disk;
+			if (info.raid_disk > -1)
+				dev->md_slot = info.raid_disk;
 			info("%s: update index on %s (%d/%d)", mdname,
 			     dev->md_name, dev->md_index, dev->md_slot);
 			monitor_dasd(dev);
@@ -659,7 +660,12 @@ enum md_rdev_status md_rdev_check_state(struct device_monitor *dev)
 	else
 		md_status = SPARE;
 
-	if (info.raid_disk != -1)
+	/*
+	 * TIMEOUT and FAULTY will set the slot number
+	 * to -1, leaving us with no idea where the
+	 * device was originally located at.
+	 */
+	if (md_status != TIMEOUT && md_status != FAULTY)
 		dev->md_slot = info.raid_disk;
 	info("%s: MD rdev (%d/%d) state %s (%x)",
 	     dev->dev_name, dev->md_index, dev->md_slot,
