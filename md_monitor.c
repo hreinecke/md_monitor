@@ -1872,9 +1872,10 @@ static int display_md(struct md_monitor *md_dev, char *buf)
 {
 	struct device_monitor *dev;
 	char status[4096];
-	int bufsize = 0, len;
+	int bufsize = 0, len = 0;
 
 	pthread_mutex_lock(&md_dev->lock);
+	buf[0] = '\0';
 	list_for_each_entry(dev, &md_dev->children, siblings) {
 		len = sprintf(status, "%s: dev %s slot %d/%d status %s %s\n",
 			       udev_device_get_sysname(md_dev->device),
@@ -1893,7 +1894,10 @@ static int display_md(struct md_monitor *md_dev, char *buf)
 		bufsize += len;
 	}
 	pthread_mutex_unlock(&md_dev->lock);
-	return len;
+	/* Strip trailing newline */
+	if (bufsize > 0)
+		bufsize--;
+	return bufsize;
 }
 
 static void fail_devices(struct udev_device *dev)
