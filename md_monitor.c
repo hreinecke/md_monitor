@@ -98,7 +98,7 @@ struct mdadm_exec {
 	pthread_t thread;
 };
 
-#define CLI_BUFLEN 1024
+#define CLI_BUFLEN 4096
 
 struct cli_monitor {
 	int running;
@@ -1806,71 +1806,65 @@ static void discover_md(struct udev *udev)
 	udev_enumerate_unref(md_enumerate);
 }
 
-static int display_md_status(struct md_monitor *md_dev, char *buf)
+static int display_md_status(struct md_monitor *md_dev, char *buf, int buflen)
 {
 	struct device_monitor *dev;
-	int slot;
-	int len = 0, i, max_index;
-	char *status;
+	int slot, max_slot = md_dev->raid_disks;
+	int len = 0;
+	char status;
 
-	status = malloc(md_dev->raid_disks + 1);
-	if (!status)
-		return -ENOMEM;
-	memset(status, '.', md_dev->raid_disks);
+	if (max_slot >= buflen) {
+		warn("%s: CLI buffer too small, min %d",
+		     udev_device_get_sysname(md_dev->device), max_slot);
+		max_slot = buflen;
+	}
+	memset(buf, '.', max_slot);
 	pthread_mutex_lock(&md_dev->lock);
 	list_for_each_entry(dev, &md_dev->children, siblings) {
 		slot = dev->md_slot;
 		if (slot < 0)
 			continue;
-		status[slot] = md_rdev_print_state_short(dev->md_status);
+		if (slot >= max_slot)
+			continue;
+		status = md_rdev_print_state_short(dev->md_status);
+		buf[slot] = status;
+		if (slot + 1> len)
+			len = slot + 1;
 	}
 	pthread_mutex_unlock(&md_dev->lock);
-	if (md_dev->raid_disks > CLI_BUFLEN) {
-		warn("%s: CLI buffer too small, min %d",
-		     udev_device_get_sysname(md_dev->device),
-		     md_dev->raid_disks);
-		max_index = CLI_BUFLEN;
-	} else {
-		max_index = md_dev->raid_disks;
-	}
-	for (i = 0; i < max_index; i++ )
-		len += sprintf(buf + len, "%c", status[i]);
+
 	info("%s: md status %s", udev_device_get_sysname(md_dev->device), buf);
-	free(status);
 	return len;
 }
 
-static int display_io_status(struct md_monitor *md_dev, char *buf)
+static int display_io_status(struct md_monitor *md_dev, char *buf, int buflen)
 {
 	struct device_monitor *dev;
-	int slot;
-	int len = 0, i, max_index;
-	char *status;
+	int slot, max_slot = md_dev->raid_disks;
+	int len = 0;
+	char status;
 
-	status = malloc(md_dev->raid_disks + 1);
-	if (!status)
-		return -ENOMEM;
-	memset(status, '.', md_dev->raid_disks);
+	if (max_slot >= buflen) {
+		warn("%s: CLI buffer too small, min %d",
+		     udev_device_get_sysname(md_dev->device), max_slot);
+		max_slot = buflen;
+	}
+	memset(buf, '.', max_slot);
 	pthread_mutex_lock(&md_dev->lock);
 	list_for_each_entry(dev, &md_dev->children, siblings) {
 		slot = dev->md_slot;
 		if (slot < 0)
 			continue;
-		status[slot] = dasd_io_print_state_short(dev->io_status);
+		if (slot >= max_slot)
+			continue;
+		status = dasd_io_print_state_short(dev->io_status);
+		buf[slot] = status;
+		if (slot + 1> len)
+			len = slot + 1;
 	}
 	pthread_mutex_unlock(&md_dev->lock);
-	if (md_dev->raid_disks > CLI_BUFLEN) {
-		warn("%s: CLI buffer too small, min %d",
-		     udev_device_get_sysname(md_dev->device),
-		     md_dev->raid_disks);
-		max_index = CLI_BUFLEN;
-	} else {
-		max_index = md_dev->raid_disks;
-	}
-	for (i = 0; i < max_index; i++ )
-		len += sprintf(buf + len, "%c", status[i]);
+
 	info("%s: io status %s", udev_device_get_sysname(md_dev->device), buf);
-	free(status);
 	return len;
 }
 
@@ -2276,9 +2270,9 @@ void *cli_monitor_thread(void *ctx)
 			goto send_msg;
 		}
 		if (!strcmp(event, "MirrorStatus")) {
-			info("%s: display mirror status for %d devices",
-			     mdstr, md_dev->raid_disks);
-			buflen = display_md_status(md_dev, buf);
+			info("%s: display mirror status for %d devices, len %d",
+			     mdstr, md_dev->raid_disks, buflen);
+			buflen = display_md_status(md_dev, buf, buflen);
 			if (buflen < 0) {
 				iov.iov_len = 1;
 				buf[0] = -buflen;
@@ -2288,9 +2282,9 @@ void *cli_monitor_thread(void *ctx)
 			goto send_msg;
 		}
 		if (!strcmp(event, "MonitorStatus")) {
-			info("%s: display monitor status for %d devices",
-			     mdstr, md_dev->raid_disks);
-			buflen = display_io_status(md_dev, buf);
+			info("%s: display monitor status for %d devices, len %d",
+			     mdstr, md_dev->raid_disks, buflen);
+			buflen = display_io_status(md_dev, buf, buflen);
 			if (buflen < 0) {
 				iov.iov_len = 1;
 				buf[0] = -buflen;
