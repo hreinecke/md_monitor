@@ -2414,6 +2414,7 @@ int cli_command(char *cmd)
 	char buf[CLI_BUFLEN];
 	int buflen = 0, i;
 	char status;
+	int fdcount = -1;
 
 	cli_sock = socket(AF_LOCAL, SOCK_DGRAM, 0);
 	if (cli_sock < 0) {
@@ -2468,7 +2469,28 @@ int cli_command(char *cmd)
 		return 5;
 	}
 
-	for (i = 0; i < POLL_TIMEOUT; i++) {
+	while (fdcount < 0) {
+		struct timeval tmo;
+		fd_set readfds;
+
+		FD_ZERO(&readfds);
+		FD_SET(cli_sock, &readfds);
+		tmo.tv_sec = POLL_TIMEOUT;
+		tmo.tv_usec = 0;
+		fdcount = select(cli_sock + 1, &readfds, NULL, NULL, &tmo);
+		if (fdcount < 0) {
+			if (errno != EINTR) {
+				buflen = -1;
+				fdcount = 0;
+				break;
+			}
+			continue;
+		} else if (fdcount == 0) {
+			/* timeout */
+			errno = ETIMEDOUT;
+			buflen = -1;
+			break;
+		}
 		memset(buf, 0x00, sizeof(buf));
 		iov.iov_base = buf;
 		iov.iov_len = CLI_BUFLEN;
@@ -2476,11 +2498,12 @@ int cli_command(char *cmd)
 		if (buflen >= 0 || errno != EAGAIN)
 			break;
 		dbg("No data received, retrying");
-		sleep(1);
 	}
 	if (buflen < 0) {
 		if (errno == EAGAIN) {
 			err("recvmsg failed, md_monitor does not respond");
+		} else if (errno == ETIMEDOUT) {
+			err("timeout receiving CLI reply");
 		} else {
 			err("recvmsg failed, error %d", errno);
 		}
