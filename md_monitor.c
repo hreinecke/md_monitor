@@ -1103,10 +1103,7 @@ void *dasd_monitor_thread (void *ctx)
 		}
 		dev->io_status = io_status;
 		pthread_mutex_unlock(&dev->lock);
-		if (io_status == IO_TIMEOUT) {
-			info("%s: I/O timeout", dev->dev_name);
-			/* Wait for real I/O timeout error */
-		} else if (io_status != IO_OK) {
+		if (io_status != IO_OK) {
 			switch (new_status) {
 			case RECOVERY:
 				warn("%s: failing device in recovery",
