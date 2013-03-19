@@ -1917,7 +1917,7 @@ static void fail_devices(struct udev_device *dev)
 	}
 	unlock_device_list();
 	if (found) {
-		fail_mirror(found, REMOVED);
+		fail_mirror(found, FAULTY);
 	}
 }
 
