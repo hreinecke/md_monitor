@@ -2054,6 +2054,8 @@ static void *mdadm_exec_thread (void *ctx)
 		if (list_empty(&active_list))
 			continue;
 		list_for_each_entry_safe(md_dev, tmp, &active_list, pending) {
+			int do_fail;
+
 			pthread_mutex_lock(&md_dev->lock);
 			md_name = udev_device_get_sysname(md_dev->device);
 
@@ -2063,19 +2065,24 @@ static void *mdadm_exec_thread (void *ctx)
 			list_del_init(&md_dev->pending);
 			if (md_dev->pending_status == UNKNOWN)
 				dbg("%s: task already completed", md_name);
-			else if (md_dev->pending_status != IN_SYNC)
+			else if (md_dev->pending_status != IN_SYNC) {
+				do_fail = 1;
 				fail_md(md_dev);
-			else
+			} else {
 				reset_md(md_dev);
+				do_fail = 0;
+			}
 
 			if (start_time.tv_sec &&
 			    gettimeofday(&end_time, NULL) == 0) {
 				timersub(&end_time, &start_time, &diff);
-				info("%s: all devices failed after "
+				info("%s: all devices %s after "
 				     "%lu.%06lu secs", md_name,
+				     do_fail ? "failed" : "reset",
 				     diff.tv_sec, diff.tv_usec);
 			} else {
-				info("%s: all devices failed", md_name);
+				info("%s: all devices %s", md_name,
+				     do_fail ? "failed" : "reset");
 			}
 			pthread_mutex_unlock(&md_dev->lock);
 		}
