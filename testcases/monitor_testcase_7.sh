@@ -9,6 +9,7 @@ MD_NUM="md1"
 MD_NAME="testcase7"
 DEVNOS_LEFT="0.0.0210 0.0.0211 0.0.0212"
 DEVNOS_RIGHT="0.0.0220 0.0.0221 0.0.0222"
+RESHAPE_TIMEOUT=60
 
 logger "Monitor Testcase 7: expand RAID"
 
@@ -46,8 +47,18 @@ fi
 echo "Waiting for reshape to finish"
 wait_for_sync ${MD_NUM}
 
-sleep 5
-# Work around bug#763206
+# Wait for lazy bitmap update to finish
+sleeptime=0
+while [ $sleeptime -lt $RESHAPE_TIMEOUT ] ; do
+    dirty=$(sed -n 's/.*bitmap: \([0-9]*\)\/[0-9]* pages.*/\1/p' /proc/mdstat)
+    [ $dirty -eq 0 ] && break;
+    sleep 1
+    (( sleeptime ++))
+done
+if [ $sleeptime -ge $RESHAPE_TIMEOUT ] ; then
+    error_exit "Bitmap not cleared after $sleeptime seconds"
+fi
+
 mdadm --grow /dev/${MD_NUM} --bitmap=none
 if [ $? != 0 ] ; then
     error_exit "Cannot remove bitmap"
