@@ -7,8 +7,8 @@
 
 MD_NUM="md1"
 MD_NAME="testcase8"
-DEVNOS_LEFT="0.0.0200 0.0.0201 0.0.0202 0.0.0203"
-DEVNOS_RIGHT="0.0.0210 0.0.0211 0.0.0212 0.0.0213"
+DEVNOS_LEFT="0.0.0210 0.0.0211 0.0.0212 0.0.0213"
+DEVNOS_RIGHT="0.0.0220 0.0.0221 0.0.0222 0.0.0223"
 SLEEPTIME=30
 
 logger "Monitor Testcase 8: Accidental DASD overwrite"
@@ -22,7 +22,7 @@ clear_metadata
 modprobe vmcp
 
 ulimit -c unlimited
-start_md $MD_NUM $MD_NAME
+start_md $MD_NUM
 
 echo "Create filesystem ..."
 if ! mkfs.ext3 /dev/${MD_NUM} ; then
@@ -34,17 +34,17 @@ if ! mount /dev/${MD_NUM} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
 
-echo "Write test file ..."
-dd if=/dev/zero of=/mnt/testfile1 bs=4096 count=1024
+echo "Run dt"
+run_dt /mnt
 
 echo "Invoke flashcopy"
-vmcp flashcopy 5000 0 16 to 5001 0 16
+vmcp flashcopy 0213 16 32 to 0210 0 16
 
 echo "Waiting for MD to pick up changes ..."
 # Wait for md_monitor to pick up changes
 sleeptime=0
 num=${#DASDS_LEFT[@]}
-while [ $num -gt 0  ] ; do
+while [ $sleeptime -lt $SLEEPTIME  ] ; do
     for d in ${DASDS_LEFT[@]} ; do
 	device=$(sed -n "s/${MD_NUM}.* \(${d}1\[[0-9]\](F)\).*/\1/p" /proc/mdstat)
 	if [ "$device" ] ; then
@@ -56,12 +56,39 @@ while [ $num -gt 0  ] ; do
     sleep 1
     (( sleeptime ++ ))
 done
+if [ $num -gt 0 ] ; then
+    error_exit "MD monitor did not pick up changes after $sleeptime seconds"
+fi
+
 echo "MD monitor picked up changes after $sleeptime seconds"
+
+killall -KILL dt
+# Wait for sync to complete
+sleep 5
 
 echo "MD status"
 mdadm --detail /dev/${MD_NUM}
-echo "Write second test file ..."
-dd if=/dev/zero of=/mnt/testfile2 bs=4096 count=1024
+
+echo "Reset Disk ${DEVICES_LEFT[0]}"
+for d in ${DEVICES_LEFT[0]} ; do
+    /sbin/md_monitor -c "Remove:/dev/${MD_NUM}@$d"
+
+    if ! mdadm --manage /dev/${MD_NUM} --remove $d ; then
+	error_exit "Cannot remove $d in MD array $MD_NUM"
+    fi
+    md_status=$(md_monitor -c "MonitorStatus:/dev/${MD_NUM}")
+    echo "Monitor status: $md_status"
+    mdadm --wait /dev/${MD_NUM}
+
+    if ! dasdfmt -p -y -b 4096 -f ${d%1} ; then
+	error_exit "Cannot format device ${d%1}"
+    fi
+    sleep 2
+    if ! fdasd -a ${d%1} ; then
+	error_exit "Cannot partition device ${d%1}"
+    fi
+    sleep 2
+done
 
 echo "Umount filesystem ..."
 umount /mnt
