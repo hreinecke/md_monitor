@@ -559,7 +559,7 @@ static void md_rdev_update_index(struct md_monitor *md,
 	int ioctl_fd, i, offset = 0;
 	mdu_disk_info_t info;
 	char mdpath[256];
-	dev_t raid_devt, mon_devt, tmp_devt;
+	dev_t mon_devt, tmp_devt;
 
 	if (!mdname) {
 		dbg("No MD array found");
@@ -593,7 +593,6 @@ static void md_rdev_update_index(struct md_monitor *md,
 		 * 128, 129, 130, 131, 132, 133, 134, 135
 		 * with pitch 16
 		 */
-		raid_devt = makedev(info.major, info.minor);
 		if (info.major == 94) {
 			offset = info.minor % 4;
 		} else if (info.major == 8 ||
