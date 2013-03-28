@@ -839,6 +839,8 @@ static void dasd_timeout_ioctl(struct device_monitor *dev, int set)
 {
 	int ioctl_arg = set ? BIODASDTIMEOUT : BIODASDRESYNC;
 
+	dbg("%s: calling DASD ioctl '%s'", dev->dev_name,
+	    set ? "BIODASDTIMEOUT" : "BIODASDRESYNC");
 	if (dev->fd < 0) {
 		const char *devnode = udev_device_get_devnode(dev->device);
 
@@ -1648,6 +1650,8 @@ static void fail_md(struct md_monitor *md_dev)
 	if (rc) {
 		warn("%s: cannot fail mirror, error %d", md_name, rc);
 	} else {
+		dbg("%s: mirror set-%c failed", md_name,
+		    (md_dev->pending_side >> 1) ? 'B' : 'A');
 		list_for_each_entry(dev, &md_dev->children, siblings) {
 			int this_side = dev->md_slot % (md_dev->layout & 0xFF);
 			if (this_side == (md_dev->pending_side >> 1)) {
