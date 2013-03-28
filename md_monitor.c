@@ -1115,8 +1115,16 @@ void *dasd_monitor_thread (void *ctx)
 				warn("%s: failing device in_sync",
 				     dev->dev_name);
 				new_status = FAULTY;
-			case PENDING:
+				/* Fallthrough */
 			case FAULTY:
+				/*
+				 * I/O timeout might not have been
+				 *  acknowledged by md yet.
+				 */
+				if (io_status == IO_TIMEOUT)
+					new_status = TIMEOUT;
+				/* Fallthrough */
+			case PENDING:
 			case TIMEOUT:
 				fail_mirror(dev, new_status);
 				break;
@@ -1248,11 +1256,6 @@ static int fail_component(struct md_monitor *md_dev,
 	enum md_rdev_status md_status;
 	int rc = 0;
 
-	/* Always set the timeout flag */
-	if (new_status == TIMEOUT) {
-		dasd_timeout_ioctl(dev, 1);
-	}
-
 	/* Check state if we need to do anything here */
 	md_status = md_rdev_check_state(dev);
 	if (md_status == new_status) {
@@ -1356,7 +1359,8 @@ static void fail_mirror(struct device_monitor *dev, enum md_rdev_status status)
 		}
 		md_dev->degraded |= (1 << side);
 	} else {
-		info("%s: Failing all devices on side %d", md_name, side);
+		info("%s: Failing all devices on side %d, status %s",
+		     md_name, side, md_rdev_print_state(status));
 		if (list_empty(&md_dev->pending)) {
 			pthread_mutex_lock(&pending_lock);
 			md_dev->pending_status = status;
@@ -1643,6 +1647,15 @@ static void fail_md(struct md_monitor *md_dev)
 		     (md_dev->pending_side >> 1));
 		return;
 	}
+	/* Set DASD timeout to abort all outstanding I/O */
+	if (md_dev->pending_status == TIMEOUT) {
+		list_for_each_entry(dev, &md_dev->children, siblings) {
+			int this_side = dev->md_slot % (md_dev->layout & 0xFF);
+			if (this_side == (md_dev->pending_side >> 1))
+				dasd_timeout_ioctl(dev, 1);
+		}
+	}
+
 	sprintf(cmdline, "mdadm --manage /dev/%s --fail set-%c", md_name,
 		(md_dev->pending_side >> 1) ? 'B' : 'A' );
 	dbg("%s: call 'system' '%s'", md_name, cmdline);
