@@ -67,7 +67,7 @@
  #endif
 #endif
 
-const char version_str[] = "md_monitor version 4.18";
+const char version_str[] = "md_monitor version 4.19";
 
 enum md_rdev_status {
 	UNKNOWN,	/* Not checked */
