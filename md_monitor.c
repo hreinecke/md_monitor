@@ -1085,6 +1085,10 @@ void *dasd_monitor_thread (void *ctx)
 		}
 		/* Re-check; status might have been changed during aio */
 		md_status = md_rdev_check_state(dev);
+		if (md_status == REMOVED)
+			/* array has been stopped */
+			break;
+
 		/* Write status back */
 		pthread_mutex_lock(&dev->lock);
 		new_status = md_rdev_update_state(dev, md_status);
