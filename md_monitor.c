@@ -275,7 +275,7 @@ static void add_component(struct md_monitor *, struct device_monitor *,
 static void remove_component(struct device_monitor *);
 static int fail_component(struct md_monitor *, struct device_monitor *,
 			  enum md_rdev_status);
-static void reset_component(struct device_monitor *);
+static int reset_component(struct device_monitor *);
 static void fail_mirror(struct device_monitor *, enum md_rdev_status);
 static void reset_mirror(struct device_monitor *);
 static void discover_md_components(struct md_monitor *md);
@@ -1279,11 +1279,18 @@ static int fail_component(struct md_monitor *md_dev,
 	return rc;
 }
 
-static void reset_component(struct device_monitor *dev)
+static int reset_component(struct device_monitor *dev)
 {
+	pthread_mutex_lock(&dev->lock);
+	if (dev->io_status != IO_OK) {
+		info("%s: I/O status %s, do not reset device", dev->dev_name,
+		     dasd_io_print_state(dev->io_status));
+		pthread_mutex_unlock(&dev->lock);
+		return -EIO;
+	}
+
 	dasd_timeout_ioctl(dev, 0);
 
-	pthread_mutex_lock(&dev->lock);
 	switch (dev->md_status) {
 	case FAULTY:
 	case TIMEOUT:
@@ -1300,6 +1307,8 @@ static void reset_component(struct device_monitor *dev)
 		break;
 	}
 	pthread_mutex_unlock(&dev->lock);
+
+	return 0;
 }
 
 static void fail_mirror(struct device_monitor *dev, enum md_rdev_status status)
@@ -1686,7 +1695,8 @@ static void reset_md(struct md_monitor *md_dev)
 	struct device_monitor *dev;
 
 	list_for_each_entry(dev, &md_dev->children, siblings) {
-		reset_component(dev);
+		if (reset_component(dev) < 0)
+			return;
 	}
 
 	if (!md_name)
