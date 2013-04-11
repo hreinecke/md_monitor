@@ -838,29 +838,33 @@ remove:
 static void dasd_timeout_ioctl(struct device_monitor *dev, int set)
 {
 	int ioctl_arg = set ? BIODASDTIMEOUT : BIODASDRESYNC;
+	int ioctl_fd;
+	const char *devnode;
 
+	if (!dev)
+		return;
+
+	devnode = udev_device_get_devnode(dev->device);
 	dbg("%s: calling DASD ioctl '%s'", dev->dev_name,
 	    set ? "BIODASDTIMEOUT" : "BIODASDRESYNC");
-	if (dev->fd < 0) {
-		const char *devnode = udev_device_get_devnode(dev->device);
-
-		if (!devnode) {
-			warn("%s: device removed", dev->dev_name);
-		} else {
-			dev->fd = open(devnode, O_RDONLY);
-			if (dev->fd < 0) {
-				warn("%s: cannot open %s: %d",
-				     dev->dev_name, devnode, errno);
-			}
-		}
+	if (!devnode) {
+		warn("%s: device removed", dev->dev_name);
+		return;
 	}
-	if (dev->fd >= 0 && ioctl(dev->fd, ioctl_arg) < 0) {
+	ioctl_fd = open(devnode, O_RDWR);
+	if (ioctl_fd < 0) {
+		warn("%s: cannot open %s: %d",
+		     dev->dev_name, devnode, errno);
+		return;
+	}
+	if (ioctl(ioctl_fd, ioctl_arg) < 0) {
 		info("%s: cannot %s DASD timeout flag, error %d",
 		     dev->dev_name, set ? "set" : "unset", errno);
 	} else {
 		dbg("%s: %s DASD timeout flag", dev->dev_name,
 		    set ? "set" : "unset");
 	}
+	close(ioctl_fd);
 }
 
 static int dasd_setup_aio(struct device_monitor *dev)
