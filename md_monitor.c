@@ -569,15 +569,14 @@ static void md_rdev_update_index(struct md_monitor *md,
 	sprintf(mdpath, "/dev/%s", mdname);
 	ioctl_fd = open(mdpath, O_RDWR|O_NONBLOCK);
 	if (ioctl_fd < 0) {
-		warn("%s: Couldn't open %s: %d",
-		     mdname, mdpath, errno);
+		warn("%s: Couldn't open %s: %m", mdname, mdpath);
 		return;
 	}
 	for (i = 0; i < 4096; i++) {
 		info.number = i;
 		if (ioctl(ioctl_fd, GET_DISK_INFO, &info) < 0) {
-			warn("%s: ioctl GET_DISK_INFO for disk %d failed, "
-			     "error %d", mdname, i, errno);
+			warn("%s: ioctl GET_DISK_INFO for disk %d failed: %m",
+			     mdname, i);
 			continue;
 		}
 		if (info.major == 0 && info.minor == 0)
@@ -634,14 +633,14 @@ enum md_rdev_status md_rdev_check_state(struct device_monitor *dev)
 	sprintf(attrpath, "/dev/%s", sysname);
 	ioctl_fd = open(attrpath, O_RDWR|O_NONBLOCK);
 	if (ioctl_fd < 0) {
-		warn("%s: cannot open %s: %d",
-		     dev->dev_name, attrpath, errno);
+		warn("%s: cannot open %s: %m",
+		     dev->dev_name, attrpath);
 		return REMOVED;
 	}
 	info.number = dev->md_index;
 	if (ioctl(ioctl_fd, GET_DISK_INFO, &info) < 0) {
-		err("%s: ioctl GET_DISK_INFO failed, error %d",
-		    dev->dev_name, errno);
+		err("%s: ioctl GET_DISK_INFO failed: %m",
+		    dev->dev_name);
 		info.state = 1 << MD_DISK_REMOVED;
 	}
 	close(ioctl_fd);
@@ -730,8 +729,8 @@ int md_set_attribute(struct md_monitor *md_dev, const char *attr,
 		attr);
 	attr_fd = open(attrpath, O_RDWR);
 	if (attr_fd < 0) {
-		warn("%s: failed to open '%s' attribute for %s: %d",
-		     md_name, attr, attrpath, errno);
+		warn("%s: failed to open '%s' attribute for %s: %m",
+		     md_name, attr, attrpath);
 		rc = errno;
 		goto remove;
 	}
@@ -739,8 +738,8 @@ int md_set_attribute(struct md_monitor *md_dev, const char *attr,
 	memset(status, 0, sizeof(status));
 	len = read(attr_fd, status, sizeof(status));
 	if (len < 0) {
-		warn("%s: cannot read '%s' attribute: %d",
-		     md_name, attr, errno);
+		warn("%s: cannot read '%s' attribute: %m",
+		     md_name, attr);
 		rc = errno;
 		goto remove;
 	}
@@ -759,8 +758,8 @@ int md_set_attribute(struct md_monitor *md_dev, const char *attr,
 
 	len = write(attr_fd, value, strlen(value));
 	if (len < 0) {
-		warn("%s: cannot set '%s' attribute to '%s': %d",
-		     md_name, attr, value, errno);
+		warn("%s: cannot set '%s' attribute to '%s': %m",
+		     md_name, attr, value);
 		rc = errno;
 	}
 	info("%s: '%s' = '%s' -> '%s'", md_name, attr, status, value);
@@ -787,16 +786,16 @@ int dasd_set_attribute(struct device_monitor *dev, const char *attr, int value)
 	sprintf(attrpath, "%s/%s", udev_device_get_syspath(parent), attr);
 	attr_fd = open(attrpath, O_RDWR);
 	if (attr_fd < 0) {
-		info("%s: failed to open '%s' attribute for %s: %d",
-		     dev->dev_name, attr, attrpath, errno);
+		info("%s: failed to open '%s' attribute for %s: %m",
+		     dev->dev_name, attr, attrpath);
 		return 0;
 	}
 
 	memset(status, 0, sizeof(status));
 	len = read(attr_fd, status, sizeof(status));
 	if (len < 0) {
-		warn("%s: cannot read '%s' attribute: %d",
-		     dev->dev_name, attr, errno);
+		warn("%s: cannot read '%s' attribute: %m",
+		     dev->dev_name, attr);
 		rc = errno;
 		goto remove;
 	}
@@ -822,8 +821,8 @@ int dasd_set_attribute(struct device_monitor *dev, const char *attr, int value)
 		sprintf(status, "%d", value);
 		len = write(attr_fd, status, strlen(status));
 		if (len < 0) {
-			warn("%s: cannot set '%s' attribute to '%s': %d",
-			     dev->dev_name, attr, status, errno);
+			warn("%s: cannot set '%s' attribute to '%s': %m",
+			     dev->dev_name, attr, status);
 			rc = errno;
 		}
 		info("%s: '%s' = '%s'", dev->dev_name, attr, status);
@@ -853,13 +852,13 @@ static void dasd_timeout_ioctl(struct device_monitor *dev, int set)
 	}
 	ioctl_fd = open(devnode, O_RDWR);
 	if (ioctl_fd < 0) {
-		warn("%s: cannot open %s: %d",
-		     dev->dev_name, devnode, errno);
+		warn("%s: cannot open %s: %m",
+		     dev->dev_name, devnode);
 		return;
 	}
 	if (ioctl(ioctl_fd, ioctl_arg) < 0) {
-		info("%s: cannot %s DASD timeout flag, error %d",
-		     dev->dev_name, set ? "set" : "unset", errno);
+		info("%s: cannot %s DASD timeout flag: %m",
+		     dev->dev_name, set ? "set" : "unset");
 	} else {
 		dbg("%s: %s DASD timeout flag", dev->dev_name,
 		    set ? "set" : "unset");
@@ -882,14 +881,12 @@ static int dasd_setup_aio(struct device_monitor *dev)
 	if (devnode && dev->fd < 0)
 		dev->fd = open(devnode, O_RDONLY);
 	if (dev->fd  < 0) {
-		warn("%s: cannot open %s: %d",
-		     dev->dev_name, devnode, errno);
+		warn("%s: cannot open %s: %m", dev->dev_name, devnode);
 		return 2;
 	}
 	flags = fcntl(dev->fd, F_GETFL);
 	if (flags < 0) {
-		warn("%s: fcntl GETFL failed: %d",
-		     dev->dev_name, errno);
+		warn("%s: fcntl GETFL failed: %m", dev->dev_name);
 		return 3;
 	}
 
@@ -937,13 +934,11 @@ static enum dasd_io_status dasd_check_aio(struct device_monitor *dev,
 		io_prep_pread(&dev->io, dev->fd, ioptr,
 			      4096, 0);
 		if (gettimeofday(&dev->aio_start_time, NULL)) {
-			warn("md_exec: failed to get time, error %d",
-			     errno);
+			warn("%s: failed to get time: %m", dev->dev_name);
 			dev->aio_start_time.tv_sec = 0;
 		}
 		if (io_submit(dev->ioctx, 1, ios) != 1) {
-			warn("%s: io_submit failed: %d",
-			     dev->dev_name, errno);
+			warn("%s: io_submit failed: %m", dev->dev_name);
 			return IO_ERROR;
 		}
 		dev->aio_active = 1;
@@ -1175,8 +1170,8 @@ void *dasd_monitor_thread (void *ctx)
 				info("%s: ignore signal",
 				     dev->dev_name);
 			} else if (errno != EAGAIN) {
-				info("%s: signal %d (%d)",
-				     dev->dev_name, rc, errno);
+				info("%s: wait failed: %s",
+				     dev->dev_name, strerror(errno));
 				break;
 			}
 			aio_timeout = monitor_timeout;
@@ -1545,8 +1540,7 @@ static void discover_md_components(struct md_monitor *md)
 	sprintf(mdpath, "/dev/%s", mdname);
 	ioctl_fd = open(mdpath, O_RDWR|O_NONBLOCK);
 	if (ioctl_fd < 0) {
-		warn("%s: Couldn't open %s: %d",
-		     mdname, mdpath, errno);
+		warn("%s: Couldn't open %s: %m", mdname, mdpath);
 		return;
 	}
 	/* Temporarily move children devices onto a separate list */
@@ -1556,8 +1550,8 @@ static void discover_md_components(struct md_monitor *md)
 	for (i = 0; i < 4096; i++) {
 		info.number = i;
 		if (ioctl(ioctl_fd, GET_DISK_INFO, &info) < 0) {
-			warn("%s: ioctl GET_DISK_INFO for disk %d failed, "
-			     "error %d", mdname, i, errno);
+			warn("%s: ioctl GET_DISK_INFO for disk %d failed: %m",
+			     mdname, i);
 			continue;
 		}
 		if (info.major == 0 && info.minor == 0)
@@ -1764,16 +1758,14 @@ static void monitor_md(struct udev_device *md_dev)
 	ioctl_fd = open(devpath, O_RDWR|O_NONBLOCK);
 	if (ioctl_fd >= 0) {
 		if (ioctl(ioctl_fd, GET_ARRAY_INFO, &info) < 0) {
-			err("%s: ioctl GET_ARRAY_INFO failed, error %d",
-			    devname, errno);
+			err("%s: ioctl GET_ARRAY_INFO failed: %m", devname);
 			info.raid_disks = 0;
 		} else if (info.raid_disks == 0) {
 			warn("%s: no RAID disks, ignoring", devname);
 		}
 		close(ioctl_fd);
 	} else {
-		err("%s: could not open %s: error %d", devname,
-		    devpath, errno);
+		err("%s: could not open %s: %m", devname, devpath);
 		info.raid_disks = 0;
 	}
 	if (info.raid_disks < 1)
@@ -2059,8 +2051,7 @@ static void *mdadm_exec_thread (void *ctx)
 			info("md_exec: no requests, waiting %ld seconds",
 			     failfast_timeout);
 			if (gettimeofday(&start_time, NULL)) {
-				err("md_exec: failed to get time, error %d",
-				    errno);
+				err("md_exec: failed to get time: %m");
 				break;
 			}
 			tmo.tv_sec = start_time.tv_sec + failfast_timeout;
@@ -2136,7 +2127,7 @@ struct mdadm_exec *start_mdadm_exec(void)
 	if (rc) {
 		mdx->thread = 0;
 		mdx->running = 0;
-		err("Failed to start mdadm exec thread: %d", errno);
+		err("Failed to start mdadm exec thread: %m");
 		free(mdx);
 		mdx = NULL;
 	}
@@ -2204,8 +2195,7 @@ void *cli_monitor_thread(void *ctx)
 
 		if (buflen < 0) {
 			if (errno != EINTR)
-				err("error receiving cli message, errno %d",
-				    errno);
+				err("error receiving cli message: %m");
 			continue;
 		}
 		cmsg = CMSG_FIRSTHDR(&smsg);
@@ -2385,7 +2375,7 @@ void *cli_monitor_thread(void *ctx)
 		}
 	send_msg:
 		if (sendmsg(cli->sock, &smsg, 0) < 0)
-			err("sendmsg failed, error %d", errno);
+			err("sendmsg failed: %m");
 	}
 	info("shutdown cli monitor");
 	pthread_cleanup_pop(1);
@@ -2412,12 +2402,12 @@ struct cli_monitor *monitor_cli(void)
 		strlen(sun.sun_path + 1) + 1;
 	cli->sock = socket(AF_LOCAL, SOCK_DGRAM, 0);
 	if (cli->sock < 0) {
-		err("cannot open cli socket, error %d", errno);
+		err("cannot open cli socket: %m");
 		free(cli);
 		return NULL;
 	}
 	if (bind(cli->sock, (struct sockaddr *) &sun, addrlen) < 0) {
-		err("cannot bind cli socket, error %d", errno);
+		err("cannot bind cli socket: %m");
 		close(cli->sock);
 		free(cli);
 		return NULL;
@@ -2429,7 +2419,7 @@ struct cli_monitor *monitor_cli(void)
 	if (rc) {
 		cli->thread = 0;
 		close(cli->sock);
-		err("Failed to start cli monitor: %d", errno);
+		err("Failed to start cli monitor: %m");
 		free(cli);
 		cli = NULL;
 	}
@@ -2465,7 +2455,7 @@ int cli_command(char *cmd)
 	addrlen = offsetof(struct sockaddr_un, sun_path) +
 		strlen(local.sun_path + 1) + 1;
 	if (bind(cli_sock, (struct sockaddr *) &local, addrlen) < 0) {
-		err("bind to local cli address failed, error %d", errno);
+		err("bind to local cli address failed: %m");
 		return 4;
 	}
 	setsockopt(cli_sock, SOL_SOCKET, SO_PASSCRED,
@@ -2502,7 +2492,7 @@ int cli_command(char *cmd)
 		if (errno == ECONNREFUSED) {
 			err("sendmsg failed, md_monitor is not running");
 		} else {
-			err("sendmsg failed, error %d", errno);
+			err("sendmsg failed: %m");
 		}
 		return 5;
 	}
@@ -2543,7 +2533,7 @@ int cli_command(char *cmd)
 		} else if (errno == ETIMEDOUT) {
 			err("timeout receiving CLI reply");
 		} else {
-			err("recvmsg failed, error %d", errno);
+			err("recvmsg failed: %s", strerror(errno));
 		}
 		status = errno;
 	} else if (buflen < 1) {
@@ -2566,22 +2556,20 @@ void
 setup_thread_attr(pthread_attr_t *attr, size_t stacksize, int detached)
 {
 	if (pthread_attr_init(attr)) {
-		fprintf(stderr, "can't initialize thread attr: %s\n",
-			strerror(errno));
+		fprintf(stderr, "can't initialize thread attr: %m\n");
 		exit(1);
 	}
 	if (stacksize < PTHREAD_STACK_MIN)
 		stacksize = PTHREAD_STACK_MIN;
 
 	if (pthread_attr_setstacksize(attr, stacksize)) {
-		fprintf(stderr, "can't set thread stack size to %lu: %s\n",
-			(unsigned long)stacksize, strerror(errno));
+		fprintf(stderr, "can't set thread stack size to %lu: %m\n",
+			(unsigned long)stacksize);
 		exit(1);
 	}
 	if (detached &&
 	    pthread_attr_setdetachstate(attr, PTHREAD_CREATE_DETACHED)) {
-		fprintf(stderr, "can't set thread to detached: %s\n",
-			strerror(errno));
+		fprintf(stderr, "can't set thread to detached: %m\n");
 		exit(1);
 	}
 }
@@ -2595,11 +2583,11 @@ pid_t daemonize(void)
 
 	umask(0);
 	if (getrlimit(RLIMIT_NOFILE, &rl) < 0) {
-		err("cannot get file limit");
+		err("cannot get file limit: %m");
 		exit (1);
 	}
 	if ((pid = fork()) < 0) {
-		err("fork failed with %d", errno);
+		err("fork failed: %m");
 		exit(errno);
 	} else if (pid != 0)
 		exit(0);
@@ -2610,12 +2598,12 @@ pid_t daemonize(void)
 	sigemptyset(&act.sa_mask);
 	act.sa_flags = 0;
 	if (sigaction(SIGHUP, &act, NULL) < 0) {
-		err("sigaction(SIGHUP) failed with %d", errno);
+		err("sigaction(SIGHUP) failed: %m");
 		exit(errno);
 	}
 
 	if ((pid = fork()) < 0) {
-		err("fork failed with %d", errno);
+		err("fork failed: %m");
 		exit(errno);
 	} else if (pid != 0) {
 		fprintf(stdout, "%d\n", pid);
@@ -2623,7 +2611,7 @@ pid_t daemonize(void)
 	}
 
 	if (chdir("/") < 0) {
-		err("Cannot chdir to '/': %d", errno);
+		err("Cannot chdir to '/': %m");
 		exit(1);
 	}
 
@@ -2751,8 +2739,7 @@ int main(int argc, char *argv[])
 				exit(1);
 			}
 			if (getrlimit(RLIMIT_NPROC, &cur) < 0) {
-				err("Cannot get current process limit, "
-				    "error %d", errno);
+				err("Cannot get current process limit: %m");
 				exit(1);
 			}
 			if (cur.rlim_cur > max_proc) {
@@ -2772,8 +2759,7 @@ int main(int argc, char *argv[])
 				cur.rlim_max = max_proc;
 			}
 			if (setrlimit(RLIMIT_NPROC, &cur) < 0) {
-				err("Cannot modify process limit, "
-				    "error %d", errno);
+				err("Cannot modify process limit: %m");
 			}
 			break;
 		case 'm':
@@ -2851,8 +2837,8 @@ int main(int argc, char *argv[])
 		if (!logfd) {
 			/* Hehe. We failed to reassign stdout, so we
 			 * need to write to stderr. */
-			fprintf(stderr, "Cannot open logfile '%s', error %d\n",
-				logfile, errno);
+			fprintf(stderr, "Cannot open logfile '%s': %m\n",
+				logfile);
 			exit (1);
 		}
 		close(2);
@@ -2891,7 +2877,7 @@ int main(int argc, char *argv[])
 	sigaddset(&thread_sigmask, SIGHUP);
 	rc = pthread_sigmask(SIG_BLOCK, &thread_sigmask, NULL);
 	if (rc) {
-		err("cannot set sigmask: %d", errno);
+		err("cannot set sigmask: %m");
 		goto out;
 	}
 
