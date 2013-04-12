@@ -1738,6 +1738,7 @@ static void remove_md(struct md_monitor *md_dev)
 	info("Stop monitoring %s",
 	     udev_device_get_devpath(md_dev->device));
 	udev_device_unref(md_dev->device);
+	pthread_mutex_destroy(&md_dev->lock);
 	free(md_dev);
 }
 
