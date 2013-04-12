@@ -317,7 +317,7 @@ static void sig_handler(int signum)
 	}
 }
 
-static struct md_monitor *lookup_md(struct udev_device *mddev)
+static struct md_monitor *lookup_md(struct udev_device *mddev, int remove)
 {
 	const char *mdname = udev_device_get_sysname(mddev);
 	struct md_monitor *tmp, *md = NULL;
@@ -334,6 +334,8 @@ static struct md_monitor *lookup_md(struct udev_device *mddev)
 			break;
 		}
 	}
+	if (remove && tmp)
+		list_del_init(&tmp->entry);
 	pthread_mutex_unlock(&md_lock);
 	return md;
 }
@@ -516,7 +518,7 @@ static void detach_dasd(struct udev_device *dev)
 		if (!list_empty(&found->siblings)) {
 			struct md_monitor *md_dev;
 
-			md_dev = lookup_md(found->parent);
+			md_dev = lookup_md(found->parent, 0);
 			if (md_dev) {
 				remove_md_component(md_dev, found);
 				remove_component(found);
@@ -1319,7 +1321,7 @@ static void fail_mirror(struct device_monitor *dev, enum md_rdev_status status)
 	const char *md_name;
 	int side;
 
-	md_dev = lookup_md(dev->parent);
+	md_dev = lookup_md(dev->parent, 0);
 	if (!md_dev) {
 		warn("%s: No md device found", dev->dev_name);
 		return;
@@ -1394,7 +1396,7 @@ static void reset_mirror(struct device_monitor *dev)
 	struct device_monitor *tmp;
 	const char *md_name;
 
-	md_dev = lookup_md(dev->parent);
+	md_dev = lookup_md(dev->parent, 0);
 	if (!md_dev) {
 		warn("%s: No md device found", dev->dev_name);
 		return;
@@ -1732,9 +1734,6 @@ static void remove_md(struct md_monitor *md_dev)
 		remove_component(dev);
 	}
 
-	pthread_mutex_lock(&md_lock);
-	list_del_init(&md_dev->entry);
-	pthread_mutex_unlock(&md_lock);
 	info("Stop monitoring %s",
 	     udev_device_get_devpath(md_dev->device));
 	udev_device_unref(md_dev->device);
@@ -1777,7 +1776,7 @@ static void monitor_md(struct udev_device *md_dev)
 		return;
 	}
 
-	found = lookup_md(md_dev);
+	found = lookup_md(md_dev, 0);
 	if (found) {
 		warn("%s: Already monitoring %s", devname,
 		       udev_device_get_devpath(found->device));
@@ -1804,7 +1803,7 @@ static void unmonitor_md(struct udev_device *md_dev)
 {
 	struct md_monitor *found_md = NULL;
 
-	found_md = lookup_md(md_dev);
+	found_md = lookup_md(md_dev, 1);
 	if (found_md)
 		remove_md(found_md);
 }
@@ -2956,6 +2955,7 @@ out:
 	info("shutting down");
 	pthread_mutex_lock(&md_lock);
 	list_for_each_entry_safe(found_md, tmp_md, &md_list, entry) {
+		list_del_init(&found_md->entry);
 		remove_md(found_md);
 	}
 	pthread_mutex_unlock(&md_lock);
