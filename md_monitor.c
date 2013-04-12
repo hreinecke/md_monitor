@@ -146,6 +146,7 @@ struct device_monitor {
 LIST_HEAD(md_list);
 LIST_HEAD(device_list);
 LIST_HEAD(pending_list);
+pthread_mutex_t md_lock;
 pthread_mutex_t device_lock;
 pthread_mutex_t pending_lock;
 pthread_cond_t pending_cond;
@@ -325,6 +326,7 @@ static struct md_monitor *lookup_md(struct udev_device *mddev)
 	if (!mdname)
 		return NULL;
 
+	pthread_mutex_lock(&md_lock);
 	list_for_each_entry(tmp, &md_list, entry) {
 		tmpname = udev_device_get_sysname(tmp->device);
 		if (tmpname && !strcmp(tmpname, mdname)) {
@@ -332,7 +334,7 @@ static struct md_monitor *lookup_md(struct udev_device *mddev)
 			break;
 		}
 	}
-
+	pthread_mutex_unlock(&md_lock);
 	return md;
 }
 
@@ -351,6 +353,7 @@ static struct md_monitor *lookup_md_alias(const char *mdpath)
 	else
 		mdname++;
 
+	pthread_mutex_lock(&md_lock);
 	list_for_each_entry(tmp, &md_list, entry) {
 		tmpname = udev_device_get_property_value(tmp->device,
 							 "MD_DEVNAME");
@@ -364,7 +367,7 @@ static struct md_monitor *lookup_md_alias(const char *mdpath)
 			break;
 		}
 	}
-
+	pthread_mutex_unlock(&md_lock);
 	return md;
 }
 
@@ -1729,7 +1732,9 @@ static void remove_md(struct md_monitor *md_dev)
 		remove_component(dev);
 	}
 
+	pthread_mutex_lock(&md_lock);
 	list_del_init(&md_dev->entry);
+	pthread_mutex_unlock(&md_lock);
 	info("Stop monitoring %s",
 	     udev_device_get_devpath(md_dev->device));
 	udev_device_unref(md_dev->device);
@@ -1787,7 +1792,9 @@ static void monitor_md(struct udev_device *md_dev)
 		INIT_LIST_HEAD(&found->children);
 		INIT_LIST_HEAD(&found->pending);
 		pthread_mutex_init(&found->lock, NULL);
+		pthread_mutex_lock(&md_lock);
 		list_add(&found->entry, &md_list);
+		pthread_mutex_unlock(&md_lock);
 		discover_md_components(found);
 	}
 }
@@ -2842,6 +2849,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	pthread_mutex_init(&md_lock, NULL);
 	pthread_mutex_init(&device_lock, NULL);
 	pthread_mutex_init(&pending_lock, NULL);
 	pthread_cond_init(&pending_cond, NULL);
@@ -2945,9 +2953,11 @@ int main(int argc, char *argv[])
 
 out:
 	info("shutting down");
+	pthread_mutex_lock(&md_lock);
 	list_for_each_entry_safe(found_md, tmp_md, &md_list, entry) {
 		remove_md(found_md);
 	}
+	pthread_mutex_unlock(&md_lock);
 
 	pthread_mutex_lock(&device_lock);
 	list_for_each_entry_safe(found_dev, tmp_dev, &device_list, entry) {
