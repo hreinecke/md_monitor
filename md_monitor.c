@@ -328,14 +328,16 @@ static struct md_monitor *lookup_md(struct udev_device *mddev, int remove)
 
 	pthread_mutex_lock(&md_lock);
 	list_for_each_entry(tmp, &md_list, entry) {
-		tmpname = udev_device_get_sysname(tmp->device);
+		tmpname = NULL;
+		if (tmp->device)
+			tmpname = udev_device_get_sysname(tmp->device);
 		if (tmpname && !strcmp(tmpname, mdname)) {
 			md = tmp;
 			break;
 		}
 	}
-	if (remove && tmp)
-		list_del_init(&tmp->entry);
+	if (remove && md)
+		list_del_init(&md->entry);
 	pthread_mutex_unlock(&md_lock);
 	return md;
 }
@@ -1763,14 +1765,15 @@ static void remove_md(struct md_monitor *md_dev)
 		remove_component(dev);
 	}
 
-	info("Stop monitoring %s",
+	info("%s: Stop monitoring",
 	     udev_device_get_devpath(md_dev->device));
 	udev_device_unref(md_dev->device);
+	md_dev->device = NULL;
 	pthread_mutex_destroy(&md_dev->lock);
 	free(md_dev);
 }
 
-static void monitor_md(struct udev_device *md_dev)
+static int monitor_md(struct udev_device *md_dev)
 {
 	struct md_monitor *found = NULL;
 	char devpath[256];
@@ -1780,17 +1783,22 @@ static void monitor_md(struct udev_device *md_dev)
 
 	devname = udev_device_get_sysname(md_dev);
 	if (!devname || !strlen(devname))
-		return;
+		return ENODEV;
 
 	memset(&info, 0, sizeof(mdu_array_info_t));
 	sprintf(devpath, "/dev/%s", devname);
 	ioctl_fd = open(devpath, O_RDWR|O_NONBLOCK);
 	if (ioctl_fd >= 0) {
 		if (ioctl(ioctl_fd, GET_ARRAY_INFO, &info) < 0) {
-			err("%s: ioctl GET_ARRAY_INFO failed: %m", devname);
+			if (errno == ENODEV)
+				info("%s: array stopped, ignoring", devname);
+			else
+				err("%s: ioctl GET_ARRAY_INFO failed: %m",
+				    devname);
 			info.raid_disks = 0;
 		} else if (info.raid_disks == 0) {
 			warn("%s: no RAID disks, ignoring", devname);
+			errno = EAGAIN;
 		}
 		close(ioctl_fd);
 	} else {
@@ -1798,11 +1806,11 @@ static void monitor_md(struct udev_device *md_dev)
 		info.raid_disks = 0;
 	}
 	if (info.raid_disks < 1)
-		return;
+		return errno;
 
 	if (info.level != 10) {
 		err("%s: not a RAID10 array", devname);
-		return;
+		return EINVAL;
 	}
 
 	found = lookup_md_new(md_dev);
@@ -1816,6 +1824,7 @@ static void monitor_md(struct udev_device *md_dev)
 		warn("%s: Already monitoring %s", devname,
 		       udev_device_get_devpath(found->device));
 	}
+	return 0;
 }
 
 static void unmonitor_md(struct udev_device *md_dev)
@@ -2008,7 +2017,8 @@ static void handle_event(struct udev_device *device)
 		}
 	} else if (!strcmp(action, "change")) {
 		if (!strncmp(devname, "md", 2)) {
-			monitor_md(device);
+			if (monitor_md(device) != 0)
+				unmonitor_md(device);
 		}
 		if (!strncmp(devname, "dasd", 4)) {
 			attach_dasd(device);
@@ -2301,9 +2311,33 @@ void *cli_monitor_thread(void *ctx)
 			goto send_msg;
 		}
 		if (!strcmp(event, "DeviceDisappeared")) {
-			info("%s: array stopped",
-			     udev_device_get_sysname(md_dev->device));
-			remove_md(md_dev);
+			struct md_monitor *tmp;
+
+			/*
+			 * The device might have been
+			 * removed by the time we get here.
+			 * So double-check.
+			 */
+			pthread_mutex_lock(&md_lock);
+			md_dev = NULL;
+			list_for_each_entry(tmp, &md_list, entry) {
+				const char *tmpname =
+					udev_device_get_sysname(tmp->device);
+				if (tmpname && !strcmp(tmpname, mdstr)) {
+					md_dev = tmp;
+					break;
+				}
+			}
+			if (md_dev)
+				list_del_init(&md_dev->entry);
+			pthread_mutex_unlock(&md_lock);
+			if (md_dev) {
+				info("%s: array stopped", mdstr);
+				remove_md(md_dev);
+			} else {
+				info("%s: array already stopped, ignoring",
+				     mdstr);
+			}
 			buf[0] = 0;
 			iov.iov_len = 0;
 			goto send_msg;
