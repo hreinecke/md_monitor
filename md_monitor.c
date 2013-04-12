@@ -423,6 +423,35 @@ out:
 	return found;
 }
 
+static struct md_monitor *lookup_md_new(struct udev_device *md_dev)
+{
+	const char *mdname = udev_device_get_sysname(md_dev);
+	struct md_monitor *tmp, *md = NULL;
+	const char *tmpname;
+
+	pthread_mutex_lock(&md_lock);
+	list_for_each_entry(tmp, &md_list, entry) {
+		tmpname = udev_device_get_sysname(tmp->device);
+		if (tmpname && !strcmp(tmpname, mdname)) {
+			md = tmp;
+			break;
+		}
+	}
+	if (!md) {
+		md = malloc(sizeof(struct md_monitor));
+		memset(md, 0, sizeof(struct md_monitor));
+		md->device = md_dev;
+		md->raid_disks = -1;
+		udev_device_ref(md_dev);
+		INIT_LIST_HEAD(&md->children);
+		INIT_LIST_HEAD(&md->pending);
+		pthread_mutex_init(&md->lock, NULL);
+		list_add(&md->entry, &md_list);
+	}
+	pthread_mutex_unlock(&md_lock);
+	return md;
+}
+
 static void attach_dasd(struct udev_device *dev)
 {
 	struct md_monitor *found_md = NULL;
@@ -1776,26 +1805,16 @@ static void monitor_md(struct udev_device *md_dev)
 		return;
 	}
 
-	found = lookup_md(md_dev, 0);
-	if (found) {
-		warn("%s: Already monitoring %s", devname,
-		       udev_device_get_devpath(found->device));
-	} else {
+	found = lookup_md_new(md_dev);
+	if (found->raid_disks < 0) {
 		warn("%s: Start monitoring %s", devname,
 		       udev_device_get_devpath(md_dev));
-		found = malloc(sizeof(struct md_monitor));
-		memset(found, 0, sizeof(struct md_monitor));
-		found->device = md_dev;
 		found->raid_disks = info.raid_disks;
 		found->layout = info.layout;
-		udev_device_ref(md_dev);
-		INIT_LIST_HEAD(&found->children);
-		INIT_LIST_HEAD(&found->pending);
-		pthread_mutex_init(&found->lock, NULL);
-		pthread_mutex_lock(&md_lock);
-		list_add(&found->entry, &md_list);
-		pthread_mutex_unlock(&md_lock);
 		discover_md_components(found);
+	} else {
+		warn("%s: Already monitoring %s", devname,
+		       udev_device_get_devpath(found->device));
 	}
 }
 
