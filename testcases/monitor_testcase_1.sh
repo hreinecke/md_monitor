@@ -33,15 +33,19 @@ fi
 
 echo "Write test file ..."
 dd if=/dev/zero of=/mnt/testfile1 bs=4096 count=1024
+md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
 sleep 5
 echo "Umount filesystem ..."
 umount /mnt
 echo "Stop MD array ..."
 mdadm --stop /dev/${MD_NUM}
+md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
 echo "Reassemble MD array ..."
 mdadm --assemble /dev/${MD_NUM}
 mdadm --wait /dev/${MD_NUM}
-mdadm --detail /dev/${MD_NUM}
+# md_monitor needs some time to pick up array data
+sleep 1
+md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
 
 echo "Remount filesystem ..."
 if ! mount /dev/${MD_NUM} /mnt ; then
@@ -49,6 +53,7 @@ if ! mount /dev/${MD_NUM} /mnt ; then
 fi
 
 ls -l /mnt
+
 sleep 5
 
 echo "Umount filesystem ..."
