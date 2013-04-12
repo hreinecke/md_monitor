@@ -516,9 +516,7 @@ static void detach_dasd(struct udev_device *dev)
 			md_dev = lookup_md(found->parent);
 			if (md_dev) {
 				remove_md_component(md_dev, found);
-				pthread_mutex_lock(&md_dev->lock);
 				remove_component(found);
-				pthread_mutex_unlock(&md_dev->lock);
 			}
 		}
 		udev_device_unref(found->device);
@@ -1238,18 +1236,15 @@ static void add_component(struct md_monitor *md, struct device_monitor *dev,
 
 static void remove_component(struct device_monitor *dev)
 {
-	pthread_t thread = dev->thread;
-
 	info("%s: Remove component (%d/%d)",
 	     dev->dev_name, dev->md_index, dev->md_slot);
 
+	pthread_mutex_lock(&dev->lock);
 	list_del_init(&dev->siblings);
 
-	if (thread) {
-		pthread_cancel(thread);
-	}
 	udev_device_unref(dev->parent);
 	dev->parent = NULL;
+	pthread_mutex_unlock(&dev->lock);
 }
 
 static int fail_component(struct md_monitor *md_dev,
@@ -2350,9 +2345,7 @@ void *cli_monitor_thread(void *ctx)
 		} else if (!strcmp(event, "Remove")) {
 			if (dev) {
 				remove_md_component(md_dev, dev);
-				pthread_mutex_lock(&md_dev->lock);
 				remove_component(dev);
-				pthread_mutex_unlock(&md_dev->lock);
 				buf[0] = 0;
 				iov.iov_len = 0;
 			} else {
