@@ -2301,7 +2301,9 @@ void *cli_monitor_thread(void *ctx)
 			goto send_msg;
 		}
 		if (!strcmp(event, "DeviceDisappeared")) {
-			/* Event handled via uevents */
+			info("%s: array stopped",
+			     udev_device_get_sysname(md_dev->device));
+			remove_md(md_dev);
 			buf[0] = 0;
 			iov.iov_len = 0;
 			goto send_msg;
