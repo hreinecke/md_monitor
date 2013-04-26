@@ -1074,8 +1074,10 @@ void dasd_monitor_cleanup(void *data)
 		dev->buf = NULL;
 	}
 	info("%s: shutdown dasd monitor thread", dev->dev_name);
+	pthread_mutex_lock(&dev->lock);
 	dev->running = 0;
 	dev->thread = 0;
+	pthread_mutex_unlock(&dev->lock);
 	udev_device_unref(dev->device);
 }
 
@@ -1109,8 +1111,9 @@ void *dasd_monitor_thread (void *ctx)
 		dbg("%s: check aio state, timeout %d secs",
 		    dev->dev_name, aio_timeout);
 		io_status = dasd_check_aio(dev, aio_timeout);
-		if (io_status == IO_UNKNOWN)
+		if (io_status == IO_UNKNOWN) {
 			continue;
+		}
 		if (io_status == IO_ERROR) {
 			warn("%s: error during aio submission, exit",
 			     dev->dev_name);
@@ -1176,7 +1179,9 @@ void *dasd_monitor_thread (void *ctx)
 					info("%s: path ok, stopping monitor",
 					     dev->dev_name);
 					sig_timeout = 0;
+					pthread_mutex_lock(&dev->lock);
 					dev->running = 0;
+					pthread_mutex_unlock(&dev->lock);
 				}
 				break;
 			case RECOVERY:
@@ -1223,33 +1228,42 @@ void *dasd_monitor_thread (void *ctx)
 static void monitor_dasd(struct device_monitor *dev)
 {
 	int rc;
+	pthread_t thread;
 
+	pthread_mutex_lock(&dev->lock);
 	if (dev->running) {
+		thread = dev->thread;
+		pthread_mutex_unlock(&dev->lock);
 		/* check if thread is still alive */
-		if (dev->thread) {
+		if (thread) {
 			/* Yes, everything is okay */
 			info("%s: notify monitor thread",
 			     dev->dev_name);
-			pthread_kill(dev->thread, SIGHUP);
+			/* Release the lock to avoid deadlocking */
+			pthread_kill(thread, SIGHUP);
 			return;
 		}
 		info("%s: Re-start monitor", dev->dev_name);
 		dev->running = 0;
 	} else {
+		pthread_mutex_unlock(&dev->lock);
 		/* Start new monitor thread */
 		info("%s: Start new monitor", dev->dev_name);
 	}
 	udev_device_ref(dev->device);
 	dev->running = 1;
-	rc = pthread_create(&dev->thread, &monitor_attr,
+	rc = pthread_create(&thread, &monitor_attr,
 			    dasd_monitor_thread, dev);
 	if (rc) {
-		dev->thread = 0;
 		dev->running = 0;
 		dev->io_status = IO_UNKNOWN;
 		warn("%s: Failed to start monitor thread, error %d",
 		     dev->dev_name, rc);
 		udev_device_unref(dev->device);
+	} else {
+		pthread_mutex_lock(&dev->lock);
+		dev->thread = thread;
+		pthread_mutex_unlock(&dev->lock);
 	}
 }
 
@@ -1289,6 +1303,7 @@ static int fail_component(struct md_monitor *md_dev,
 {
 	enum md_rdev_status md_status;
 	int rc = 0;
+	pthread_t thread;
 
 	/* Check state if we need to do anything here */
 	md_status = md_rdev_check_state(dev);
@@ -1299,17 +1314,19 @@ static int fail_component(struct md_monitor *md_dev,
 	}
 
 	pthread_mutex_lock(&dev->lock);
-
-	if (dev->running && dev->thread) {
+	thread = dev->thread;
+	if (dev->running && thread) {
 		if (new_status == REMOVED)
 			dev->running = 0;
+		pthread_mutex_unlock(&dev->lock);
 		info("%s: notify monitor thread",
 		     dev->dev_name);
-		pthread_kill(dev->thread, SIGHUP);
+		pthread_kill(thread, SIGHUP);
 		rc = EBUSY;
+	} else {
+		pthread_mutex_unlock(&dev->lock);
 	}
 
-	pthread_mutex_unlock(&dev->lock);
 	return rc;
 }
 
@@ -1329,6 +1346,7 @@ static int reset_component(struct device_monitor *dev)
 	case FAULTY:
 	case TIMEOUT:
 	case REMOVED:
+	case SPARE:
 		dev->md_status = RECOVERY;
 		break;
 	case BLOCKED:
@@ -1531,6 +1549,7 @@ static void remove_md_component(struct md_monitor *md_dev,
 				struct device_monitor *dev)
 {
 	const char *md_name = udev_device_get_sysname(md_dev->device);
+	pthread_t thread;
 
 	pthread_mutex_lock(&dev->lock);
 	if (dev->md_status == PENDING) {
@@ -1539,15 +1558,16 @@ static void remove_md_component(struct md_monitor *md_dev,
 	info("%s: setting '%s' to REMOVED",
 	     md_name, dev->dev_name);
 	dev->md_status = REMOVED;
-	pthread_mutex_unlock(&dev->lock);
-	if (dev->running && dev->thread) {
-		pthread_t thread = dev->thread;
-
+	thread = dev->thread;
+	if (dev->running && thread) {
 		info("%s: shutdown monitor thread",
 		     dev->dev_name);
 		dev->running = 0;
-		pthread_cancel(thread);
-		pthread_join(thread, NULL);
+		pthread_mutex_unlock(&dev->lock);
+		if (pthread_cancel(thread) == 0)
+			pthread_join(thread, NULL);
+	} else {
+		pthread_mutex_unlock(&dev->lock);
 	}
 }
 
