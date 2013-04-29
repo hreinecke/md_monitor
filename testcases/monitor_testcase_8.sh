@@ -69,6 +69,9 @@ sleep 5
 echo "MD status"
 mdadm --detail /dev/${MD_NUM}
 
+old_status=$(md_monitor -c "MonitorStatus:/dev/${MD_NUM}")
+echo "Monitor status: $old_status"
+
 echo "Reset Disk ${DEVICES_LEFT[0]}"
 for d in ${DEVICES_LEFT[0]} ; do
     /sbin/md_monitor -c "Remove:/dev/${MD_NUM}@$d"
@@ -88,7 +91,31 @@ for d in ${DEVICES_LEFT[0]} ; do
 	error_exit "Cannot partition device ${d%1}"
     fi
     sleep 2
+    if ! mdadm --manage /dev/${MD_NUM} --add --failfast $d ; then
+	error_exit "Cannot add $d to MD array $MD_NUM"
+    fi
+    # This shouldn't be necessary ...
+    if ! mdadm --manage /dev/${MD_NUM} --re-add faulty ; then
+	error_exit "Cannot re-add faulty devices to MD array $MD_NUM"
+    fi
 done
+
+MD_TIMEOUT=15
+wait_time=0
+while [ $wait_time -lt $MD_TIMEOUT ] ; do
+    new_status=$(md_monitor -c "MonitorStatus:/dev/${MD_NUM}")
+    [ $new_status != $old_status ] && break
+    sleep 1
+    (( wait_time++ ))
+done
+if [ $wait_time -ge $MD_TIMEOUT ] ; then
+    error_exit "Monitor status hasn't changed for $MD_TIMEOUT seconds"
+fi
+echo "Monitor status: $new_status"
+mdadm --detail /dev/${MD_NUM}
+
+echo "Wait for sync"
+wait_for_sync ${MD_NUM}
 
 echo "Umount filesystem ..."
 umount /mnt
