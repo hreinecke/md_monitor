@@ -131,6 +131,7 @@ struct device_monitor {
 	pthread_mutex_t lock;
 	enum md_rdev_status md_status;
 	enum dasd_io_status io_status;
+	int ref;
 	int md_index;
 	int md_slot;
 	int fd;
@@ -458,6 +459,37 @@ static struct md_monitor *lookup_md_new(struct udev_device *md_dev)
 	return md;
 }
 
+static struct device_monitor *dasd_monitor_get(struct device_monitor *dev)
+{
+	if (!dev)
+		return NULL;
+
+	pthread_mutex_lock(&dev->lock);
+	dev->ref++;
+	pthread_mutex_unlock(&dev->lock);
+
+	return dev;
+}
+
+static void dasd_monitor_put(struct device_monitor *dev)
+{
+	if (!dev)
+		return;
+
+	pthread_mutex_lock(&dev->lock);
+	if (dev->ref == 1) {
+		udev_device_unref(dev->device);
+		dev->device = NULL;
+		pthread_mutex_unlock(&dev->lock);
+		pthread_mutex_destroy(&dev->lock);
+		free(dev);
+		return;
+	} else {
+		dev->ref--;
+	}
+	pthread_mutex_unlock(&dev->lock);
+}
+
 static void attach_dasd(struct udev_device *dev)
 {
 	struct md_monitor *found_md = NULL;
@@ -506,6 +538,7 @@ static void attach_dasd(struct udev_device *dev)
 		found = malloc(sizeof(struct device_monitor));
 		memset(found, 0, sizeof(struct device_monitor));
 		found->device = udev_device_get_parent(dev);
+		found->ref = 1;
 		found->md_slot = -1;
 		found->md_index = -1;
 		found->io_status = IO_UNKNOWN;
@@ -559,9 +592,7 @@ static void detach_dasd(struct udev_device *dev)
 				remove_component(found);
 			}
 		}
-		udev_device_unref(found->device);
-		pthread_mutex_destroy(&found->lock);
-		free(found);
+		dasd_monitor_put(found);
 	} else {
 		warn("%s: no device to detach", dasd_name);
 	}
@@ -1082,7 +1113,7 @@ void dasd_monitor_cleanup(void *data)
 	dev->running = 0;
 	dev->thread = 0;
 	pthread_mutex_unlock(&dev->lock);
-	udev_device_unref(dev->device);
+	dasd_monitor_put(dev);
 }
 
 void *dasd_monitor_thread (void *ctx)
@@ -1094,6 +1125,7 @@ void *dasd_monitor_thread (void *ctx)
 	struct timespec tmo;
 	int rc, aio_timeout = 0, sig_timeout = checker_timeout;
 
+	dasd_monitor_get(dev);
 	dev->buf = NULL;
 	dev->fd = -1;
 	dev->aio_active = 0;
@@ -1234,21 +1266,24 @@ static void monitor_dasd(struct device_monitor *dev)
 	int rc;
 	pthread_t thread;
 
+	dasd_monitor_get(dev);
 	pthread_mutex_lock(&dev->lock);
 	if (dev->running) {
-		thread = dev->thread;
-		pthread_mutex_unlock(&dev->lock);
 		/* check if thread is still alive */
-		if (thread) {
+		if (dev->thread) {
 			/* Yes, everything is okay */
 			info("%s: notify monitor thread",
 			     dev->dev_name);
 			/* Release the lock to avoid deadlocking */
+			thread = dev->thread;
+			pthread_mutex_unlock(&dev->lock);
 			pthread_kill(thread, SIGHUP);
+			dasd_monitor_put(dev);
 			return;
 		}
 		info("%s: Re-start monitor", dev->dev_name);
 		dev->running = 0;
+		pthread_mutex_unlock(&dev->lock);
 	} else {
 		pthread_mutex_unlock(&dev->lock);
 		/* Start new monitor thread */
@@ -1269,6 +1304,7 @@ static void monitor_dasd(struct device_monitor *dev)
 		dev->thread = thread;
 		pthread_mutex_unlock(&dev->lock);
 	}
+	dasd_monitor_put(dev);
 }
 
 static void add_component(struct md_monitor *md, struct device_monitor *dev,
