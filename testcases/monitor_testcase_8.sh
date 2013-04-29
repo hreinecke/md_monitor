@@ -112,10 +112,18 @@ if [ $wait_time -ge $MD_TIMEOUT ] ; then
     error_exit "Monitor status hasn't changed for $MD_TIMEOUT seconds"
 fi
 echo "Monitor status: $new_status"
+
+# Bug #817587
+echo "MD status before mdadm --wait:"
+cat /proc/mdstat
 mdadm --detail /dev/${MD_NUM}
 
 echo "Wait for sync"
-wait_for_sync ${MD_NUM}
+mdadm --wait /dev/${MD_NUM}
+
+echo "MD status after mdadm --wait:"
+cat /proc/mdstat
+mdadm --detail /dev/${MD_NUM}
 
 echo "Umount filesystem ..."
 umount /mnt
