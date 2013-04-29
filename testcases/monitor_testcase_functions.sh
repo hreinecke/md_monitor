@@ -19,7 +19,7 @@ function devno_from_dasd() {
 }
 
 function error_exit() {
-    local errst=$1
+    local errstr=$1
 
     echo $errstr
     if [ "$MDADM_PID" ] ; then
