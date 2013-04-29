@@ -1224,6 +1224,7 @@ void *dasd_monitor_thread (void *ctx)
 			case BLOCKED:
 			case FAULTY:
 			case TIMEOUT:
+			case SPARE:
 				reset_mirror(dev);
 				/* Fallthrough */
 			default:
