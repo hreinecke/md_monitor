@@ -94,10 +94,6 @@ for d in ${DEVICES_LEFT[0]} ; do
     if ! mdadm --manage /dev/${MD_NUM} --add --failfast $d ; then
 	error_exit "Cannot add $d to MD array $MD_NUM"
     fi
-    # This shouldn't be necessary ...
-    if ! mdadm --manage /dev/${MD_NUM} --re-add faulty ; then
-	error_exit "Cannot re-add faulty devices to MD array $MD_NUM"
-    fi
 done
 
 MD_TIMEOUT=15
@@ -119,6 +115,8 @@ cat /proc/mdstat
 mdadm --detail /dev/${MD_NUM}
 
 echo "Wait for sync"
+mdadm --wait /dev/${MD_NUM}
+
 mdadm --wait /dev/${MD_NUM}
 
 echo "MD status after mdadm --wait:"
