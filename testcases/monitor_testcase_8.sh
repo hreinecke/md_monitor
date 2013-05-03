@@ -109,14 +109,7 @@ if [ $wait_time -ge $MD_TIMEOUT ] ; then
 fi
 echo "Monitor status: $new_status"
 
-# Bug #817587
-echo "MD status before mdadm --wait:"
-cat /proc/mdstat
-mdadm --detail /dev/${MD_NUM}
-
 echo "Wait for sync"
-mdadm --wait /dev/${MD_NUM}
-
 mdadm --wait /dev/${MD_NUM}
 
 echo "MD status after mdadm --wait:"
