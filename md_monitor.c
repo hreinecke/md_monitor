@@ -1143,23 +1143,29 @@ void *dasd_monitor_thread (void *ctx)
 		pthread_exit(&rc);
 	}
 
+	pthread_mutex_lock(&dev->lock);
 	while (dev->running) {
 		dbg("%s: check aio state, timeout %d secs",
 		    dev->dev_name, aio_timeout);
+		pthread_mutex_unlock(&dev->lock);
 		io_status = dasd_check_aio(dev, aio_timeout);
 		if (io_status == IO_UNKNOWN) {
+			pthread_mutex_lock(&dev->lock);
 			continue;
 		}
 		if (io_status == IO_ERROR) {
 			warn("%s: error during aio submission, exit",
 			     dev->dev_name);
+			pthread_mutex_lock(&dev->lock);
 			break;
 		}
 		/* Re-check; status might have been changed during aio */
 		md_status = md_rdev_check_state(dev);
-		if (md_status == REMOVED)
+		if (md_status == REMOVED) {
 			/* array has been stopped */
+			pthread_mutex_lock(&dev->lock);
 			break;
+		}
 
 		/* Write status back */
 		pthread_mutex_lock(&dev->lock);
@@ -1176,6 +1182,7 @@ void *dasd_monitor_thread (void *ctx)
 				fail_mirror(dev, new_status);
 			}
 			aio_timeout = monitor_timeout;
+			pthread_mutex_lock(&dev->lock);
 			continue;
 		}
 		dev->io_status = io_status;
@@ -1234,13 +1241,16 @@ void *dasd_monitor_thread (void *ctx)
 		info("%s: state %s / %s",
 		     dev->dev_name, md_rdev_print_state(new_status),
 		     dasd_io_print_state(io_status));
-		if (!sig_timeout)
+		if (!sig_timeout) {
+			pthread_mutex_lock(&dev->lock);
 			break;
+		}
 		tmo.tv_sec = sig_timeout;
 		tmo.tv_nsec = 0;
 		info("%s: waiting %ld seconds ...",
 		     dev->dev_name, (long)tmo.tv_sec);
 		rc = sigtimedwait(&thread_sigmask, NULL, &tmo);
+		pthread_mutex_lock(&dev->lock);
 		if (rc < 0) {
 			if (errno == EINTR) {
 				info("%s: ignore signal",
@@ -1257,6 +1267,7 @@ void *dasd_monitor_thread (void *ctx)
 			aio_timeout = 0;
 		}
 	}
+	pthread_mutex_unlock(&dev->lock);
 
 	pthread_cleanup_pop(1);
 	return ((void *)0);
