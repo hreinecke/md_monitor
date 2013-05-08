@@ -2203,7 +2203,7 @@ static void *mdadm_exec_thread (void *ctx)
 		if (list_empty(&active_list))
 			continue;
 		list_for_each_entry_safe(md_dev, tmp, &active_list, pending) {
-			int do_fail;
+			int do_fail = 0;
 
 			pthread_mutex_lock(&md_dev->lock);
 			if (!md_dev->device) {
@@ -2223,7 +2223,6 @@ static void *mdadm_exec_thread (void *ctx)
 				fail_md(md_dev);
 			} else {
 				reset_md(md_dev);
-				do_fail = 0;
 			}
 
 			if (start_time.tv_sec &&
