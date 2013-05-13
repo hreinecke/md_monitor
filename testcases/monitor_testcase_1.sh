@@ -7,8 +7,6 @@
 
 MD_NUM="md1"
 MD_NAME="testcase1"
-DEVNOS_LEFT="0.0.0210 0.0.0211 0.0.0212 0.0.0213"
-DEVNOS_RIGHT="0.0.0220 0.0.0221 0.0.0222 0.0.0223"
 
 logger "Monitor Testcase 1: Array startup/shutdown"
 

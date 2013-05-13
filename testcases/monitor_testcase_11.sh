@@ -7,14 +7,12 @@
 
 MD_NUM="md1"
 MD_NAME="testcase11"
-DEVNOS_LEFT="0.0.0210 0.0.0211 0.0.0212 0.0.0213 0.0.0214 0.0.0215 0.0.0216 0.0.0217 0.0.0218"
-DEVNOS_RIGHT="0.0.0220 0.0.0221 0.0.0222 0.0.0223 0.0.0224 0.0.0225 0.0.0226 0.0.0227 0.0.0228"
 
 logger "Monitor Testcase 11: Multiple Array startup/shutdown"
 
 stop_md $MD_NUM
 
-activate_dasds
+activate_dasds 16
 
 clear_metadata
 

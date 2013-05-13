@@ -7,8 +7,6 @@
 
 MD_NUM="md1"
 MD_NAME="testcase8"
-DEVNOS_LEFT="0.0.0210 0.0.0211 0.0.0212 0.0.0213"
-DEVNOS_RIGHT="0.0.0220 0.0.0221 0.0.0222 0.0.0223"
 SLEEPTIME=30
 
 logger "Monitor Testcase 8: Accidental DASD overwrite"
@@ -38,7 +36,7 @@ echo "Run dt"
 run_dt /mnt
 
 echo "Invoke flashcopy"
-vmcp flashcopy 0213 16 32 to 0210 0 16
+vmcp flashcopy a003 16 32 to a000 0 16
 
 echo "Waiting for MD to pick up changes ..."
 # Wait for md_monitor to pick up changes

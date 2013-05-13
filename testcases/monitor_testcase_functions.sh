@@ -117,10 +117,32 @@ function stop_md() {
 }
 
 function activate_dasds() {
+    local devno_max=$1
     local devno;
     local dasd;
+    # linux025 layout
+    # local DEVNOS_LEFT_START="0x0210"
+    # local DEVNOS_LEFT_END="0x0217"
+    # local DEVNOS_RIGHT_START="0x0220"
+    # local DEVNOS_RIGHT_END="0x0227"
+    # linux021 layout
+    local DEVNO_LEFT_START="0xa000"
+    local DEVNO_LEFT_END="0xa0c8"
+    local DEVNO_RIGHT_START="0xa100"
+    local DEVNO_RIGHT_END="0xa1c8"
+    local i=0
 
-    for devno in $DEVNOS_LEFT ; do
+    # Use 8 DASDs per side per default
+    if [ -z "$devno_max" ] ; then
+	devno_max=8
+    fi
+    devno_start=$((DEVNO_LEFT_START))
+    devno_end=$(( devno_start + $devno_max ))
+    if [ $devno_end -gt $((DEVNO_LEFT_END)) ] ; then
+	devno_end=$((DEVNO_LEFT_END))
+    fi
+    while [ $devno_start -lt $devno_end ] ; do
+	devno=$(printf "0.0.%04x" $devno_start)
 	read online < /sys/bus/ccw/devices/$devno/online
 	if [ "$online" -ne 1 ] ; then
 	    if ! echo 1 > /sys/bus/ccw/devices/$devno/online ; then
@@ -128,27 +150,75 @@ function activate_dasds() {
 	    fi
 	    udevadm settle
 	fi
-	dasd=$(lsdasd | sed -n "s/$devno *active *\(dasd[a-z]*\).*/\1/p")
+	dasd=
+	for d in /sys/bus/ccw/devices/$devno/block/* ; do
+	    if [ -d "$d" ] ; then
+		dasd=${d##*/}
+	    fi
+	done
 	if [ -z "$dasd" ] ; then
 	    error_exit "Cannot activate device $devno"
 	fi
+	read status < /sys/bus/ccw/devices/$devno/status
+	if [ "$status" = "unformatted" ] ; then
+	    if ! dasdfmt -p -y -b 4096 -f /dev/$dasd ; then
+		error_exit "Failed to format $dasd"
+	    fi
+	    read status < /sys/bus/ccw/devices/$devno/status
+	fi
+	if [ "$status" != "online" ] ; then
+	    error_exit "Failed to activate $dasd"
+	fi
 	DASDS_LEFT+=("$dasd")
+	if [ ! -d /sys/block/${dasd}/${dasd}1 ] || [ -d /sys/block/dasd/${dasd}/${dasd}2 ] ; then
+	    if ! fdasd -a /dev/$dasd ; then
+		error_exit "Failed to partition $dasd"
+	    fi
+	fi
 	DEVICES_LEFT+=("/dev/${dasd}1")
+	(( devno_start++))
     done
 
-    for devno in $DEVNOS_RIGHT ; do
+    devno_start=$((DEVNO_RIGHT_START))
+    devno_end=$(( devno_start + $devno_max ))
+    if [ $devno_end -gt $((DEVNO_RIGHT_END)) ] ; then
+	devno_end=$((DEVNO_RIGHT_END))
+    fi
+    while [ $devno_start -lt $devno_end ] ; do
+	devno=$(printf "0.0.%04x" $devno_start)
 	read online < /sys/bus/ccw/devices/$devno/online
 	if [ "$online" -ne 1 ] ; then
 	    if ! echo 1 > /sys/bus/ccw/devices/$devno/online ; then
 		error_exit "Cannot set device $devno online"
 	    fi
 	fi
-	dasd=$(lsdasd | sed -n "s/$devno *active *\(dasd[a-z]*\).*/\1/p")
+	dasd=
+	for d in /sys/bus/ccw/devices/$devno/block/* ; do
+	    if [ -d "$d" ] ; then
+		dasd=${d##*/}
+	    fi
+	done
 	if [ -z "$dasd" ] ; then
 	    error_exit "Cannot activate device $devno"
 	fi
+	read status < /sys/bus/ccw/devices/$devno/status
+	if [ "$status" = "unformatted" ] ; then
+	    if ! dasdfmt -p -y -b 4096 -f /dev/$dasd ; then
+		error_exit "Failed to format $dasd"
+	    fi
+	    read status < /sys/bus/ccw/devices/$devno/status
+	fi
+	if [ "$status" != "online" ] ; then
+	    error_exit "Failed to activate $dasd"
+	fi
 	DASDS_RIGHT+=("$dasd")
+	if [ ! -d /sys/block/${dasd}/${dasd}1 ] || [ -d /sys/block/dasd/${dasd}/${dasd}2 ] ; then
+	    if ! fdasd -a /dev/$dasd ; then
+		error_exit "Failed to partition $dasd"
+	    fi
+	fi
 	DEVICES_RIGHT+=("/dev/${dasd}1")
+	(( devno_start++))
     done
 }
 

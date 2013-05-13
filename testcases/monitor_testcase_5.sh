@@ -2,16 +2,11 @@
 #
 # Testcase 5: Successive Disk attach/detach
 #
-# This testcase does not work.
-# I have to check with Neil Brown if it even
-# is a valid testcase.
 
 . ./monitor_testcase_functions.sh
 
 MD_NUM="md1"
 MD_NAME="testcase5"
-DEVNOS_LEFT="0.0.0210 0.0.0211 0.0.0212 0.0.0213"
-DEVNOS_RIGHT="0.0.0220 0.0.0221 0.0.0222 0.0.0223"
 MONITOR_TIMEOUT=60
 SLEEPTIME=30
 

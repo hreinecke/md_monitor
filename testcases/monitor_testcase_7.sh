@@ -7,8 +7,6 @@
 
 MD_NUM="md1"
 MD_NAME="testcase7"
-DEVNOS_LEFT="0.0.0210 0.0.0211 0.0.0212"
-DEVNOS_RIGHT="0.0.0220 0.0.0221 0.0.0222"
 RESHAPE_TIMEOUT=60
 
 logger "Monitor Testcase 7: expand RAID"
@@ -20,7 +18,7 @@ activate_dasds
 clear_metadata
 
 ulimit -c unlimited
-start_md $MD_NUM 4
+start_md $MD_NUM 6
 
 echo "Create filesystem ..."
 if ! mkfs.ext3 /dev/${MD_NUM} ; then
@@ -32,14 +30,14 @@ if ! mount /dev/${MD_NUM} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
 
-echo "Add ${DEVICES_LEFT[2]} ${DEVICES_RIGHT[2]}"
-mdadm --add /dev/${MD_NUM} --failfast ${DEVICES_LEFT[2]} ${DEVICES_RIGHT[2]}
+echo "Add ${DEVICES_LEFT[3]} ${DEVICES_RIGHT[3]}"
+mdadm --add /dev/${MD_NUM} --failfast ${DEVICES_LEFT[3]} ${DEVICES_RIGHT[3]}
 if [ $? != 0 ] ; then
     error_exit "Cannot add devices"
 fi
 
 echo "Expand array"
-mdadm --grow /dev/${MD_NUM} --raid-devices=6
+mdadm --grow /dev/${MD_NUM} --raid-devices=8
 if [ $? != 0 ] ; then
     error_exit "Cannot expand array"
 fi
@@ -72,14 +70,14 @@ sleep 5
 
 echo "Resize array"
 raid_size=$(sed -n 's/ *\([0-9]*\) blocks .*/\1/p' /proc/mdstat)
-raid_size=$(( raid_size / 6 ))
-raid_size=$(( raid_size * 4 ))
+raid_size=$(( raid_size / 8 ))
+raid_size=$(( raid_size * 6 ))
 mdadm --grow /dev/${MD_NUM} --array-size=$raid_size
 if [ $? != 0 ] ; then
     error_exit "Cannot resize array"
 fi
 
-mdadm --grow /dev/${MD_NUM} --raid-devices=4
+mdadm --grow /dev/${MD_NUM} --raid-devices=6
 if [ $? != 0 ] ; then
     error_exit "Cannot reshape array"
 fi
