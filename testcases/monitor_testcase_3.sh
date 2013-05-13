@@ -60,8 +60,13 @@ for devno in $DEVNOS_LEFT ; do
 	error_exit "Cannot set device $devno online"
     fi
 done
-sleep 2
+echo "Wait for sync"
+if ! wait_for_sync ${MD_NUM} ; then
+    error_exit "Failed to activate first half"
+fi
+
 mdadm --detail /dev/${MD_NUM}
+md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
 
 echo "Shutting down second half ..."
 for d in ${DEVICES_RIGHT[@]} ; do
@@ -70,6 +75,7 @@ done
 if ! mdadm --manage /dev/${MD_NUM} --fail ${DEVICES_RIGHT[@]} ; then
     error_exit "Cannot fail $d in MD array $MD_NUM"
 fi
+mdadm --wait /dev/${MD_NUM}
 if ! mdadm --manage /dev/${MD_NUM} --remove ${DEVICES_RIGHT[@]} ; then
     error_exit "Cannot remove $d in MD array $MD_NUM"
 fi

@@ -169,6 +169,7 @@ function activate_dasds() {
 	if [ "$status" != "online" ] ; then
 	    error_exit "Failed to activate $dasd"
 	fi
+	DEVNOS_LEFT="$DEVNOS_LEFT $devno"
 	DASDS_LEFT+=("$dasd")
 	if [ ! -d /sys/block/${dasd}/${dasd}1 ] || [ -d /sys/block/dasd/${dasd}/${dasd}2 ] ; then
 	    if ! fdasd -a /dev/$dasd ; then
@@ -211,6 +212,7 @@ function activate_dasds() {
 	if [ "$status" != "online" ] ; then
 	    error_exit "Failed to activate $dasd"
 	fi
+	DEVNOS_RIGHT="$DEVNOS_RIGHT $devno"
 	DASDS_RIGHT+=("$dasd")
 	if [ ! -d /sys/block/${dasd}/${dasd}1 ] || [ -d /sys/block/dasd/${dasd}/${dasd}2 ] ; then
 	    if ! fdasd -a /dev/$dasd ; then
