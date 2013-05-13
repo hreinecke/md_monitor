@@ -37,7 +37,11 @@ echo "Umount filesystem ..."
 umount /mnt
 echo "Stop MD array ..."
 mdadm --stop /dev/${MD_NUM}
-md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
+if md_monitor -c"ArrayStatus:/dev/${MD_NUM}" >/dev/null ; then
+    error_exit "md_monitor detected live array!"
+else
+    echo "md_monitor detected stopped array"
+fi
 echo "Reassemble MD array ..."
 mdadm --assemble /dev/${MD_NUM}
 mdadm --wait /dev/${MD_NUM}
