@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Testcase 5: Successive Disk attach/detach
+# Testcase 12: Successive Disk attach/detach
 #
 
 . ./monitor_testcase_functions.sh
@@ -10,7 +10,7 @@ MD_NAME="testcase5"
 MONITOR_TIMEOUT=60
 SLEEPTIME=30
 
-logger "Monitor Testcase 5: Successive Disk detach/attach"
+logger "Monitor Testcase 12: Successive Disk detach/attach"
 
 stop_md $MD_NUM
 
