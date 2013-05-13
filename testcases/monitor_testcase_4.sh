@@ -67,7 +67,8 @@ mdadm --detail /dev/${MD_NUM}
 
 echo "$(date) Re-attach disk on first half ..."
 for devno in $DEVNOS_LEFT ; do
-    vmcp link \* ${devno##*.} ${devno##*.}
+    # vmcp link \* ${devno##*.} ${devno##*.}
+    vmcp att ${devno##*.} \*
     break
 done
 
@@ -78,7 +79,7 @@ num=${#DASDS_LEFT[@]}
 while [ $num -gt 0  ] ; do
     [ $sleeptime -ge $MONITOR_TIMEOUT ] && break
     for d in ${DASDS_LEFT[@]} ; do
-	device=$(sed -n "s/${MD_NUM}.* \(${d}1\[[0-9]\]\).*/\1/p" /proc/mdstat)
+	device=$(sed -n "s/${MD_NUM}.* \(${d}1\[[0-9]*\]\).*/\1/p" /proc/mdstat)
 	if [ "$device" ] ; then
 	    (( num -- ))
 	fi
@@ -136,7 +137,8 @@ if [ "$detach_other_half" ] ; then
     ls /mnt
     echo "Re-attach disk on second half ..."
     for devno in $DEVNOS_RIGHT ; do
-	vmcp link \* ${devno##*.} ${devno##*.}
+	# vmcp link \* ${devno##*.} ${devno##*.}
+	vmcp att ${devno##*.} \*
 	break;
     done
 
@@ -147,7 +149,7 @@ if [ "$detach_other_half" ] ; then
     while [ $num -gt 0  ] ; do
 	[ $sleeptime -ge $MONITOR_TIMEOUT ] && break
 	for d in ${DASDS_LEFT[@]} ; do
-	    device=$(sed -n "s/${MD_NUM}.* \(${d}1\[[0-9]\]\).*/\1/p" /proc/mdstat)
+	    device=$(sed -n "s/${MD_NUM}.* \(${d}1\[[0-9]*\]\).*/\1/p" /proc/mdstat)
 	    if [ "$device" ] ; then
 		(( num -- ))
 	    fi
