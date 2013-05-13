@@ -34,7 +34,7 @@ function start_md() {
     local MD_MONITOR=/sbin/md_monitor
     local MD_SCRIPT=/usr/share/misc/md_notify_device.sh
     local LOGFILE="/tmp/monitor_${MD_NAME}.log"
-    local MD_ARGS="--bitmap=internal --chunk=1024 --bitmap-chunk=512K --assume-clean --force"
+    local MD_ARGS="--bitmap=internal --chunk=1024 --assume-clean --force"
     local n=0
     local devlist
 
