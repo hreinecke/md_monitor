@@ -79,9 +79,10 @@ Display md_monitor usage information.
 .TP
 \fI-V\fR, \fI--version\fR
 Display md_monitor version information.
+
 .SH MD_MONITOR COMMAND MODE
-When specifying \fI--command\fR the \fBmd_monitor\fR program connects to a
-already running \fBmd_monitor\fR program and send a pre-defined
+When specifying \fI--command\fR the \fBmd_monitor\fR program connects
+to a already running \fBmd_monitor\fR program and send a pre-defined
 command. The command has the following syntax:
 .TP
 \fIcmd\fR:\fImd\fR@\fIdev\fR
@@ -99,11 +100,20 @@ Rebuild has started on array \fImd\fR.
 Rebuild has finished on array \fImd\fR.
 .TP
 \fBDeviceDisappeared\fR
-MD array has been stopped; \fBmd_monitor\fR will stop
-monitoring the component devices for that array.
+Array \fImd\fR has been stopped; \fBmd_monitor\fR will stop
+monitoring the component devices for array \fImd\fR.
+.TP
+\fBNewArray\fR
+Array \fImd\fR has been started. This event is ignored
+by md_monitor; new arrays will be detected via uevents.
 .TP
 \fBFail\fR
 MD detected a failure on the component device \fIdev\fR of array
+\fImd\fR. \fBmd_monitor\fR will re-check the device every
+\fIfailfast_expires\fR seconds.
+.TP
+\fBFailSpare\fR
+MD detected a failure on the spare device \fIdev\fR of array
 \fImd\fR. \fBmd_monitor\fR will re-check the device every
 \fIfailfast_expires\fR seconds.
 .TP
@@ -115,8 +125,8 @@ monitoring this device.
 \fBSpareActive\fR
 MD has integrated the device \fIdev\fR into array
 \fImd\fR. \fBmd_monitor\fR will re-start monitoring of this device
-every \fIfailfast_expires\fR seconds. The check interval will be increased for
-each successful check up to a maximum of
+every \fIfailfast_expires\fR seconds. The check interval will be
+increased for each successful check up to a maximum of
 \fIfailfast_expires\fR * \fIfailfast_retries\fR seconds.
 .TP
 \fBArrayStatus\fR
@@ -128,8 +138,8 @@ Each character represents the status of the MD component device
 at that position. For the possible states see the next paragraph.
 .TP
 \fBMonitorStatus\fR
-Return the current internal status of the monitored devices in
-abbreviated form. Each character represents the internal status
+Return the current I/O status of the monitored devices in
+abbreviated form. Each character represents the I/O status
 of the monitored device in abbreviated form.
 
 .SH DEVICE STATUS DISPLAY
@@ -149,8 +159,8 @@ In_Sync
 \fBW\fR
 Faulty
 .TP
-\fBU\fR
-Ready
+\fBT\fR
+Timeout
 .TP
 \fBS\fR
 Spare
@@ -163,13 +173,16 @@ Recovery pending
 .TP
 \fBP\fR
 Removal pending
+.TP
+\fBB\fR
+Blocked
 .PP
 \fBR\fR and \fBP\fR are intermediate states, which are set by
 \fBmd_monitor\fR whenever a command has been sent to mdadm, but no
 notification has been received yet.
-\fBU\fR is set when the device is found working, but
-\fI--fail-mirror\fR is set and not all devices within the mirror side
-are found to be working.
+\fBB\fR is set when MD attempts to fail the second half of the mirror
+when the first half is already failed. MD will hold off I/O to the
+entire mirror until the second half is useable again.
 .PP
 The possible states for \fIMonitorStatus\fR are:
 .TP
@@ -200,21 +213,22 @@ seconds has expired.
 \fBmd_monitor\fR sets up a path checker thread for each MD component
 device. This path checker will issue every \fIcheck-time\fR seconds an
 asynchronous I/O request to the device. It will then wait up to
-\fIexpires\fR * \fIretries\fR seconds for this I/O to complete.
+\fIfailfast_expires\fR * \fIfailfast_retries\fR seconds for this I/O
+to complete.
 If no response has been received during that time, the monitor status
-for this path is set to 'I/O timeout'. If the I/O completed the
-monitor status for this path will be set to 'I/O ok' or 'I/O failed',
+for this path is set to \fII/O timeout\fR. If the I/O completed the
+monitor status for this path will be set to \fII/O ok\fR or \fII/O failed\fR,
 depending on whether the I/O completed without error or not.
 If the path checker has been interrupted during waiting, the monitor
-status for this path will be set to 'I/O pending'.
+status for this path will be set to \fII/O pending\fR.
 After the monitor status has been updated, the path checker thread will
 update the MD status for this device and invoke an action, depending on
 these two states.
 If \fIcheck-in-sync\fR has been specified the path checker continue to
-run even for 'in_sync' paths. Otherwise the path checker be stopped
-when a path is marked as 'in_sync'.
+run even for \fIin_sync\fR paths. Otherwise the path checker be stopped
+when a path is marked as \fIin_sync\fR.
 Path checkers will be restarted whenever a device is marked
-as 'faulty' or 'timeout'.
+as \fIfaulty\fR or \fItimeout\fR.
 
 .SH MDADM INTEGRATION
 \fBmd_monitor\fR listens to udev events for any device changes. It
@@ -226,31 +240,53 @@ To use this function \fBmdadm\fR needs to be started with
 \fBmdadm --monitor --scan --program=\fImd_script\fR
 .PP
 where \fImd_script\fR is a bash script containing eg:
-.PP
 
-.nf
+.RS 1
 #!/bin/bash
+.br
 # MD monitor script
+.br
 #
-
+.br
+.br
 EVENT=$1
+.br
 MD=$2
+.br
 DEV=$3
-
+.br
+.br
 /sbin/md_monitor -c "${EVENT}:${MD}@${DEV}"
-.ni
+.br
+.RE
 .PP
 A default \fImd_script\fR is installed at
 \fR/usr/share/misc/md_notify_device.sh\fR.
 .PP
 It is recommended to use an \fI/etc/mdadm.conf\fR configuration file
 when using \fBmd_monitor\fR to monitor MD arrays.
+To enable automatic device assembly into MD arrays the configuration
+file should include the lines:
+
+.RS 1
+.fC
+.br
+POLICY action=re-add
+.br
+AUTO -all
+.br
+.fR
+.RE
+.PP
+It is recommended to include these line when using md_monitor.
+
 .SH FILES
+.TP
 .I /usr/share/misc/md_notify_device.sh
 Default \fBmd_monitor\fR script.
+.TP
 .I /etc/mdadm.conf
 MD configuration file
 .SH SEE ALSO
-.PP
-.IR mdadm(8)
-.IR mdadm.conf(7)
+.IR
+mdadm(8), mdadm.conf(7)
