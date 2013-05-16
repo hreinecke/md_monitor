@@ -462,12 +462,7 @@ static struct md_monitor *lookup_md_new(struct udev_device *md_dev)
 static struct device_monitor *dasd_monitor_get(struct device_monitor *dev)
 {
 	if (!dev)
-		return;
-
-	if (dev->ref == 0) {
-		warn("%s: invalid reference %d", dev->dev_name, dev->ref);
 		return NULL;
-	}
 
 	pthread_mutex_lock(&dev->lock);
 	dev->ref++;
@@ -480,11 +475,6 @@ static void dasd_monitor_put(struct device_monitor *dev)
 {
 	if (!dev)
 		return;
-
-	if (dev->ref == 0) {
-		warn("%s: invalid reference %d", dev->dev_name, dev->ref)
-		return;
-	}
 
 	pthread_mutex_lock(&dev->lock);
 	dev->ref--;
@@ -1060,7 +1050,7 @@ static enum dasd_io_status dasd_check_aio(struct device_monitor *dev,
 			warn("%s: path timeout", dev->dev_name);
 			io_status = IO_TIMEOUT;
 		} else {
-			warn("%s: no events", dev->dev_name);
+			dbg("%s: no events", dev->dev_name);
 			io_status = IO_PENDING;
 		}
 	} else {
@@ -3129,15 +3119,14 @@ out:
 	}
 	pthread_mutex_unlock(&md_lock);
 
-	pthread_mutex_lock(&device_lock);
+	lock_device_list();
 	list_for_each_entry_safe(found_dev, tmp_dev, &device_list, entry) {
 		info("%s: detached '%s'", found_dev->dev_name,
 		     udev_device_get_devpath(found_dev->device));
 		list_del_init(&found_dev->entry);
-		udev_device_unref(found_dev->device);
-		free(found_dev);
+		dasd_monitor_put(found_dev);
 	}
-	pthread_mutex_unlock(&device_lock);
+	unlock_device_list();
 
 	if (cli && cli->thread) {
 		pthread_cancel(cli->thread);
