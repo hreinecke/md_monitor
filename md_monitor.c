@@ -462,7 +462,12 @@ static struct md_monitor *lookup_md_new(struct udev_device *md_dev)
 static struct device_monitor *dasd_monitor_get(struct device_monitor *dev)
 {
 	if (!dev)
+		return;
+
+	if (dev->ref == 0) {
+		warn("%s: invalid reference %d", dev->dev_name, dev->ref);
 		return NULL;
+	}
 
 	pthread_mutex_lock(&dev->lock);
 	dev->ref++;
@@ -476,16 +481,20 @@ static void dasd_monitor_put(struct device_monitor *dev)
 	if (!dev)
 		return;
 
+	if (dev->ref == 0) {
+		warn("%s: invalid reference %d", dev->dev_name, dev->ref)
+		return;
+	}
+
 	pthread_mutex_lock(&dev->lock);
-	if (dev->ref == 1) {
+	dev->ref--;
+	if (dev->ref == 0) {
 		udev_device_unref(dev->device);
 		dev->device = NULL;
 		pthread_mutex_unlock(&dev->lock);
 		pthread_mutex_destroy(&dev->lock);
 		free(dev);
 		return;
-	} else {
-		dev->ref--;
 	}
 	pthread_mutex_unlock(&dev->lock);
 }
@@ -536,6 +545,12 @@ static void attach_dasd(struct udev_device *dev)
 		info("%s: already attached", found->dev_name);
 	} else {
 		found = malloc(sizeof(struct device_monitor));
+		if (!found) {
+			err("%s: out of memory allocating device",
+			    udev_device_get_sysname(dev));
+			unlock_device_list();
+			return;
+		}
 		memset(found, 0, sizeof(struct device_monitor));
 		found->device = udev_device_get_parent(dev);
 		found->ref = 1;
@@ -1289,8 +1304,8 @@ static void monitor_dasd(struct device_monitor *dev)
 			/* Release the lock to avoid deadlocking */
 			thread = dev->thread;
 			pthread_mutex_unlock(&dev->lock);
-			pthread_kill(thread, SIGHUP);
 			dasd_monitor_put(dev);
+			pthread_kill(thread, SIGHUP);
 			return;
 		}
 		info("%s: Re-start monitor", dev->dev_name);
