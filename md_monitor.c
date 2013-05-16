@@ -1106,6 +1106,8 @@ void dasd_monitor_cleanup(void *data)
 		dev->aio_active = 0;
 	}
 	if (dev->fd >= 0) {
+		/* Reset any stale ioctl flags */
+		dasd_timeout_ioctl(dev, 0);
 		close(dev->fd);
 		dev->fd = -1;
 	}
@@ -1131,6 +1133,9 @@ void *dasd_monitor_thread (void *ctx)
 	int rc, aio_timeout = 0, sig_timeout = checker_timeout;
 
 	dasd_monitor_get(dev);
+	/* Reset any stale ioctl flags */
+	dasd_timeout_ioctl(dev, 0);
+
 	dev->buf = NULL;
 	dev->fd = -1;
 	dev->aio_active = 0;
