@@ -1306,7 +1306,6 @@ static void monitor_dasd(struct device_monitor *dev)
 		/* Start new monitor thread */
 		info("%s: Start new monitor", dev->dev_name);
 	}
-	udev_device_ref(dev->device);
 	dev->running = 1;
 	rc = pthread_create(&thread, &monitor_attr,
 			    dasd_monitor_thread, dev);
@@ -1315,7 +1314,6 @@ static void monitor_dasd(struct device_monitor *dev)
 		dev->io_status = IO_UNKNOWN;
 		warn("%s: Failed to start monitor thread, error %d",
 		     dev->dev_name, rc);
-		udev_device_unref(dev->device);
 	} else {
 		pthread_mutex_lock(&dev->lock);
 		dev->thread = thread;
