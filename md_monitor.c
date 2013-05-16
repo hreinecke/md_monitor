@@ -2854,9 +2854,6 @@ int main(int argc, char *argv[])
 
 	logfd = stdout;
 
-	setup_thread_attr(&monitor_attr, 64 * 1024, 1);
-	setup_thread_attr(&cli_attr, 64 * 1024, 0);
-
 	while (1) {
 		option = getopt_long(argc, argv, "ac:de:f:l:mp:r:st:vyhV",
 				     options, NULL);
@@ -3003,6 +3000,9 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	setup_thread_attr(&monitor_attr, 64 * 1024, 1);
+	setup_thread_attr(&cli_attr, 64 * 1024, 0);
+
 	pthread_mutex_init(&md_lock, NULL);
 	pthread_mutex_init(&device_lock, NULL);
 	pthread_mutex_init(&pending_lock, NULL);
@@ -3136,6 +3136,8 @@ out:
 	}
 	free(mdx);
 
+	pthread_attr_destroy(&monitor_attr);
+	pthread_attr_destroy(&cli_attr);
 	udev_monitor_unref(udev_monitor);
 	udev_monitor_unref(kernel_monitor);
 	udev_unref(udev);
