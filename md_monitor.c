@@ -2828,7 +2828,7 @@ int main(int argc, char *argv[])
 	struct device_monitor *tmp_dev, *found_dev;
 	struct cli_monitor *cli = NULL;
 	struct mdadm_exec *mdx = NULL;
-	unsigned long max_proc;
+	unsigned long max_proc, max_files = 4096;
 	struct rlimit cur;
 	char *command_to_send = NULL;
 	char *logfile = NULL;
@@ -2844,6 +2844,7 @@ int main(int argc, char *argv[])
 		{ "logfile", required_argument, NULL, 'f' },
 		{ "process-limit", required_argument, NULL, 'l' },
 		{ "fail-mirror", no_argument, NULL, 'm' },
+		{ "open-file-limit", required_argument, NULL, 'O' },
 		{ "fail-disk", no_argument, NULL, 'o' },
 		{ "retries", required_argument, NULL, 'r' },
 		{ "log-priority", required_argument, NULL, 'p' },
@@ -2863,7 +2864,7 @@ int main(int argc, char *argv[])
 	logfd = stdout;
 
 	while (1) {
-		option = getopt_long(argc, argv, "ac:de:f:l:mp:r:st:vyhV",
+		option = getopt_long(argc, argv, "ac:de:f:l:mn:p:r:st:vyhV",
 				     options, NULL);
 		if (option == -1) {
 			break;
@@ -2923,6 +2924,14 @@ int main(int argc, char *argv[])
 			break;
 		case 'm':
 			fail_mirror_side = 1;
+			break;
+		case 'n':
+			max_files = strtoul(optarg, NULL, 10);
+			if (max_files < 1) {
+				err("Invalid limit '%s' for open-file-limit",
+				    optarg);
+				exit(1);
+			}
 			break;
 		case 'o':
 			fail_mirror_side = 0;
@@ -3042,6 +3051,27 @@ int main(int argc, char *argv[])
 	if (rc) {
 		err("cannot set sigmask: %m");
 		goto out;
+	}
+	/* Increase number of open files */
+	if (getrlimit(RLIMIT_NOFILE, &cur) < 0) {
+		err("Cannot get current number of open files: %m");
+		exit(1);
+	}
+	if (cur.rlim_cur > max_files) {
+		warn("Current number of open files "
+		     "higher than requested (cur %d, req %d)",
+		     cur.rlim_cur, max_files);
+		cur.rlim_cur = max_files;
+	} else if (cur.rlim_max > max_files) {
+		info("Increasing soft open files limit to %d", max_files);
+		cur.rlim_cur = max_files;
+	} else {
+		info("Increasing hard open files limit to %d", max_files);
+		cur.rlim_cur = max_files;
+		cur.rlim_max = max_files;
+	}
+	if (setrlimit(RLIMIT_NOFILE, &cur) < 0) {
+		err("Cannot modify open files limit: %m");
 	}
 
 	info("startup");
