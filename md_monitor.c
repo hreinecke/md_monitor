@@ -2797,22 +2797,29 @@ void usage(void)
 {
 	err("Usage: md_monitor [--daemonize|-d] [--logfile=<file>|-f <file>]"
 	    "[--adjust-timeout|-a] [--expires=<num>|-e <num>] [--retries=<num>|-r <num>]"
-	    "[--log-priority=<prio>|-p <prio>] [--syslog|-s] [--verbose|-v]  "
-	    "[--command=<cmd>|-c <cmd>] [--fail-mirror|-m] [--fail-disk|-o] "
+	    "[--adjust-timeout|a] [--command=<cmd>|-c <cmd>] [--daemonize|-d] "
+	    "[--expires=<num>|-e <num>] [--logfile=<file>|-l <file>] "
+	    "[--process-limit=<num>|-P <num>] [--open-file-limit=<num>|-O <num>] "
+	    "[--log-priority=<prio>|-p <prio>] [--retries=<num>|-r <num>] "
+	    "[--fail-mirror|-m] [--fail-disk|-o] "
+	    "[--syslog|-s] [--verbose|-v] [--version|-V] "
 	    "[--check-in-sync|y] [--check-timeout=<secs>|-t <secs>] [--help|-h]\n"
 	    "  --adjust-timeout               track I/O latency ot adjust timeout\n"
+	    "  --command=<cmd>                send command <cmd> to daemon\n"
 	    "  --daemonize                    start monitor in background\n"
 	    "  --expires=<num>                set failfast_expires to <num>\n"
 	    "  --logfile=<file>               use <file> for logging\n"
+	    "  --process-limit=<num>          max number of processes\n"
+	    "  --open-file-limit=<num>        max number of open files; default is 4096\n"
 	    "  --log-priority=<prio>          set logging priority to <prio>\n"
 	    "  --retries=<num>                set failfast_retries to <num>\n"
-	    "  --command=<cmd>                send command <cmd> to daemon\n"
 	    "  --fail-mirror                  fail entire mirror side\n"
 	    "  --fail-disk                    fail affected disk only\n"
 	    "  --syslog                       use syslog for logging\n"
 	    "  --check-timeout=<secs>         run path checker every <secs> seconds\n"
 	    "  --check-in-sync                run path checker for in_sync devices\n"
 	    "  --verbose                      increase logging priority\n"
+	    "  --version                      print md_monitor version number\n"
 	    "  --help\n");
 }
 
@@ -2842,12 +2849,12 @@ int main(int argc, char *argv[])
 		{ "daemonize", no_argument, NULL, 'd' },
 		{ "expires", required_argument, NULL, 'e' },
 		{ "logfile", required_argument, NULL, 'f' },
-		{ "process-limit", required_argument, NULL, 'l' },
 		{ "fail-mirror", no_argument, NULL, 'm' },
 		{ "open-file-limit", required_argument, NULL, 'O' },
 		{ "fail-disk", no_argument, NULL, 'o' },
-		{ "retries", required_argument, NULL, 'r' },
+		{ "process-limit", required_argument, NULL, 'P' },
 		{ "log-priority", required_argument, NULL, 'p' },
+		{ "retries", required_argument, NULL, 'r' },
 		{ "syslog", no_argument, NULL, 's' },
 		{ "check-timeout", required_argument, NULL, 't' },
 		{ "verbose", no_argument, NULL, 'v' },

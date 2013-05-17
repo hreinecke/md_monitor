@@ -6,11 +6,13 @@
 md_monitor \- MD device monitor
 .SH SYNOPSIS
 .B md_monitor
+[\fI-a\fR|\fI--adjust-timeout\fR]
 [\fI-d\fR|\fI--daemonize\fR]
-[\fI-f \fBfile\fR|\fI--file \fBfile\fR]
+[\fI-f \fBfile\fR|\fI--logfile \fBfile\fR]
 [\fI-s\fR|\fI--syslog\fR]
 [\fI-e \fBnum\fR|\fI--expires=\fBnum\fR]
-[\fI-l \fBnum\fR|\fI--process-limit=\fBnum\fR]
+[\fI-P \fBnum\fR|\fI--process-limit=\fBnum\fR]
+[\fI-O \fBnum\fR|\fI--open-file-limit=\fBnum\fR]
 [\fI-m\fR|\fI--fail-mirror\fR]
 [\fI-o\fR|\fI--fail-disk\fR]
 [\fI-r \fBnum\fR|\fI--retries=\fBnum\fR]
@@ -29,35 +31,48 @@ change, setting devices to 'faulty' or re-integrate working devices.
 .PP
 \fBmd_monitor\fR recognizes the following command-line options:
 .TP
+\fI-a\fR, \fI--adjust-timeout\fR
+Adjust monitor timeout with current I/O latency
+.TP
+\fI-c \fBcmd\fR, \fI--command=\fBcmd\fR
+Send command \fBcmd\fR to daemon.
+.TP
 \fI-d\fR, \fI--daemonize\fR
 Start \fBmd_monitor\fR in background
-.TP
-\fI-f \fIfile\fR, \fI--logfile=\fBfile\fR
-Write logging information into \fBfile\fR instead of stdout
-.TP
-\fI-s\fR, \fI--syslog\fR
-Write logging information to syslog.
 .TP
 \fI-e \fBnum\fR, \fI--expires=\fBnum\fR
 Set failfast_expires to \fBnum\fR.
 .TP
-\fI-l \fBnum\fR, \fI--process-limit=\fBnum\fR
-Set maximum number of processes (RLIMIT_NPROC, see \fBgetrlimit\fR(2))
-to \fBnum\fR.
+\fI-f \fIfile\fR, \fI--logfile=\fBfile\fR
+Write logging information into \fBfile\fR instead of stdout
+.TP
+\fI-h\fR, \fI--help\fR
+Display md_monitor usage information.
 .TP
 \fI-m\fR, \fI--fail-mirror\fR
 Fail and reset the entire mirror half when one device failed.
 This is the default.
 .TP
+\fI-O \fBnum\fR, \fI--open-file-limit=\fBnum\fR
+Set maximum number of open files (RLIMIT_NOFILE, see \fBgetrlimit\fR(2))
+to \fBnum\fR. Default is 4096.
+.TP
 \fI-o\fR, \fI--fail-disk\fR
 Only fail the affected disk when one device failed.
 This is the opposite of \fI--fail-mirror\fR.
 .TP
-\fI-r \fBnum\fR, \fI--retries=\fBnum\fR
-Set failfast_retries to \fBnum\fR.
+\fI-P \fBnum\fR, \fI--process-limit=\fBnum\fR
+Set maximum number of processes (RLIMIT_NPROC, see \fBgetrlimit\fR(2))
+to \fBnum\fR.
 .TP
 \fI-p \fBprio\fR, \fI--log-priority=\fBprio\fR
 Set logging priority to \fBprio\fR.
+.TP
+\fI-r \fBnum\fR, \fI--retries=\fBnum\fR
+Set failfast_retries to \fBnum\fR.
+.TP
+\fI-s\fR, \fI--syslog\fR
+Write logging information to syslog.
 .TP
 \fI-t \fBsecs\fR, \fI--check-timeout=\fBsecs\fR
 Run path checker every \fBsecs\fR seconds. Default is 1.
@@ -70,12 +85,6 @@ Run path checkers for 'in_sync' devices. Without this option
 path checkers will be stopped whenever a device is detected
 to be 'in_sync'. They will be re-started once a device has
 been marked as 'faulty' or 'timeout'.
-.TP
-\fI-c \fBcmd\fR, \fI--command=\fBcmd\fR
-Send command \fBcmd\fR to daemon.
-.TP
-\fI-h\fR, \fI--help\fR
-Display md_monitor usage information.
 .TP
 \fI-V\fR, \fI--version\fR
 Display md_monitor version information.
