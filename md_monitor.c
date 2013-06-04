@@ -2853,7 +2853,7 @@ int main(int argc, char *argv[])
 	logfd = stdout;
 
 	while (1) {
-		option = getopt_long(argc, argv, "c:de:f:l:mn:p:r:st:vyhV",
+		option = getopt_long(argc, argv, "c:de:f:mo:p:P:r:st:vyhV",
 				     options, NULL);
 		if (option == -1) {
 			break;
@@ -2877,7 +2877,7 @@ int main(int argc, char *argv[])
 		case 'f':
 			logfile = optarg;
 			break;
-		case 'l':
+		case 'P':
 			max_proc = strtoul(optarg, NULL, 10);
 			if (max_proc < 1) {
 				err("Invalid limit '%s' for max_processes",
@@ -2911,7 +2911,7 @@ int main(int argc, char *argv[])
 		case 'm':
 			fail_mirror_side = 1;
 			break;
-		case 'n':
+		case 'O':
 			max_files = strtoul(optarg, NULL, 10);
 			if (max_files < 1) {
 				err("Invalid limit '%s' for open-file-limit",
