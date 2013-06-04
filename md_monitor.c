@@ -158,7 +158,6 @@ static int udev_exit;
 static int monitor_timeout;
 static int failfast_timeout = 5;
 static int failfast_retries = 2;
-static int monitor_round_limit = 200000;
 static sigset_t thread_sigmask;
 static int daemonize_monitor;
 static int log_priority = LOG_INFO;
@@ -167,7 +166,6 @@ static int use_syslog;
 static int fail_mirror_side = 1;
 static int stop_on_sync = 1;
 static int checker_timeout = 1;
-static int adjust_timeout = 0;
 static pid_t monitor_pid;
 FILE *logfd;
 
@@ -1055,7 +1053,6 @@ static enum dasd_io_status dasd_check_aio(struct device_monitor *dev,
 		}
 	} else {
 		struct timeval diff, end_time;
-		int timeout_adj;
 
 		if (dev->aio_start_time.tv_sec &&
 		    gettimeofday(&end_time, NULL) == 0) {
@@ -1073,19 +1070,6 @@ static enum dasd_io_status dasd_check_aio(struct device_monitor *dev,
 			info("%s: path ok, %lu.%06lu secs", dev->dev_name,
 			     diff.tv_sec, diff.tv_usec);
 			io_status = IO_OK;
-		}
-		if (adjust_timeout) {
-			if (diff.tv_usec > monitor_round_limit)
-				diff.tv_sec++;
-			timeout_adj = monitor_timeout - diff.tv_sec;
-			if (timeout_adj < 0) {
-				warn("%s: I/O latency too high, not adjusting",
-				     dev->dev_name);
-			} else {
-				info("%s: adjusting timeout to %d",
-				     dev->dev_name, timeout_adj);
-				dasd_set_attribute(dev, "timeout", timeout_adj);
-			}
 		}
 	}
 	return io_status;
@@ -2796,15 +2780,14 @@ pid_t daemonize(void)
 void usage(void)
 {
 	err("Usage: md_monitor [--daemonize|-d] [--logfile=<file>|-f <file>]"
-	    "[--adjust-timeout|-a] [--expires=<num>|-e <num>] [--retries=<num>|-r <num>]"
-	    "[--adjust-timeout|a] [--command=<cmd>|-c <cmd>] [--daemonize|-d] "
+	    "[--expires=<num>|-e <num>] [--retries=<num>|-r <num>]"
+	    "[--command=<cmd>|-c <cmd>] [--daemonize|-d] "
 	    "[--expires=<num>|-e <num>] [--logfile=<file>|-l <file>] "
 	    "[--process-limit=<num>|-P <num>] [--open-file-limit=<num>|-O <num>] "
 	    "[--log-priority=<prio>|-p <prio>] [--retries=<num>|-r <num>] "
 	    "[--fail-mirror|-m] [--fail-disk|-o] "
 	    "[--syslog|-s] [--verbose|-v] [--version|-V] "
 	    "[--check-in-sync|y] [--check-timeout=<secs>|-t <secs>] [--help|-h]\n"
-	    "  --adjust-timeout               track I/O latency ot adjust timeout\n"
 	    "  --command=<cmd>                send command <cmd> to daemon\n"
 	    "  --daemonize                    start monitor in background\n"
 	    "  --expires=<num>                set failfast_expires to <num>\n"
@@ -2844,7 +2827,6 @@ int main(int argc, char *argv[])
 	int rc = 0;
 
 	static const struct option options[] = {
-		{ "adjust-timeout", required_argument, NULL, 'a' },
 		{ "command", required_argument, NULL, 'c' },
 		{ "daemonize", no_argument, NULL, 'd' },
 		{ "expires", required_argument, NULL, 'e' },
@@ -2871,16 +2853,13 @@ int main(int argc, char *argv[])
 	logfd = stdout;
 
 	while (1) {
-		option = getopt_long(argc, argv, "ac:de:f:l:mn:p:r:st:vyhV",
+		option = getopt_long(argc, argv, "c:de:f:l:mn:p:r:st:vyhV",
 				     options, NULL);
 		if (option == -1) {
 			break;
 		}
 
 		switch (option) {
-		case 'a':
-			adjust_timeout = 1;
-			break;
 		case 'c':
 			command_to_send = optarg;
 			break;

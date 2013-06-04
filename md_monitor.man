@@ -6,7 +6,6 @@
 md_monitor \- MD device monitor
 .SH SYNOPSIS
 .B md_monitor
-[\fI-a\fR|\fI--adjust-timeout\fR]
 [\fI-d\fR|\fI--daemonize\fR]
 [\fI-f \fBfile\fR|\fI--logfile \fBfile\fR]
 [\fI-s\fR|\fI--syslog\fR]
@@ -30,9 +29,6 @@ change, setting devices to 'faulty' or re-integrate working devices.
 .SH OPTIONS
 .PP
 \fBmd_monitor\fR recognizes the following command-line options:
-.TP
-\fI-a\fR, \fI--adjust-timeout\fR
-Adjust monitor timeout with current I/O latency
 .TP
 \fI-c \fBcmd\fR, \fI--command=\fBcmd\fR
 Send command \fBcmd\fR to daemon.
