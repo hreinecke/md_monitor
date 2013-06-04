@@ -1967,7 +1967,7 @@ static int display_md_status(struct md_monitor *md_dev, char *buf, int buflen)
 	pthread_mutex_unlock(&md_dev->lock);
 
 	info("%s: md status %s", udev_device_get_sysname(md_dev->device), buf);
-	return len;
+	return max_slot;
 }
 
 static int display_io_status(struct md_monitor *md_dev, char *buf, int buflen)
@@ -2002,7 +2002,7 @@ static int display_io_status(struct md_monitor *md_dev, char *buf, int buflen)
 	pthread_mutex_unlock(&md_dev->lock);
 
 	info("%s: io status %s", udev_device_get_sysname(md_dev->device), buf);
-	return len;
+	return max_slot;
 }
 
 static int display_md(struct md_monitor *md_dev, char *buf)
