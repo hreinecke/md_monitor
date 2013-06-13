@@ -2853,7 +2853,7 @@ int main(int argc, char *argv[])
 	logfd = stdout;
 
 	while (1) {
-		option = getopt_long(argc, argv, "c:de:f:mo:p:P:r:st:vyhV",
+		option = getopt_long(argc, argv, "c:de:f:mO:o:p:P:r:st:vyhV",
 				     options, NULL);
 		if (option == -1) {
 			break;
