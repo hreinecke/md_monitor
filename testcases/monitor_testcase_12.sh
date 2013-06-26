@@ -122,7 +122,8 @@ else
     cat /proc/mdstat
 fi
 
-killall -KILL dt
+echo "$(date) Stop dt"
+stop_dt
 
 wait_for_sync ${MD_NUM}
 

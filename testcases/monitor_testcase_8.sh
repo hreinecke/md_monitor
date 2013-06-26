@@ -60,7 +60,9 @@ fi
 
 echo "MD monitor picked up changes after $sleeptime seconds"
 
-killall -KILL dt
+echo "Stop dt"
+stop_dt
+
 # Wait for sync to complete
 sleep 5
 

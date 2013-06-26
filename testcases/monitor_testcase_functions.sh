@@ -101,7 +101,7 @@ function stop_md() {
     for md in $(sed -n 's/^\(md[0-9]*\) .*/\1/p' /proc/mdstat) ; do
 	if [ "$md" = "$cur_md" ] ; then
 	    if grep -q /dev/$md /proc/mounts ; then
-		echo "Unmouning filesystems ..."
+		echo "Unmounting filesystems ..."
 		umount /dev/$md
 		if [ $? -ne 0 ] ; then
 		    echo "Cannot unmount /dev/$md"
@@ -240,22 +240,48 @@ function clear_metadata() {
     done
 }
 
+function run_dd() {
+    local MNT=$1
+    local BLKS=$2
+
+    while true ; do
+	dd if=/dev/random of=${MNT}/dd.scratch bs=4k count=${BLKS}
+	dd if=${MNT}/dd.scratch of=/dev/null bs=4k count=${BLKS}
+    done
+}
+
 function run_dt() {
     local MNT=$1
     local DT_PROG
     local CPUS
+    local BLKS
 
-    DT_PROG=$(which dt)
+    DT_PROG=$(which dt 2> /dev/null)
 
     if [ -z "$DT_PROG" ] ; then
-	echo "dt not installed"
-	exit 1
+	BLKS=$(df | sed -n "s/[a-z/]*[0-9]* *[0-9]* *[0-9]* *\([0-9]*\) *[0-9]*% *.*${MNT##*/}/\1/p")
+	if [ -z "$BLKS" ] ; then
+	    echo "Device $MNT not found"
+	    exit 1
+	fi
+	BLKS=$(( BLKS >> 3 ))
+	run_dd $MNT $BLKS > /tmp/dt.log 2>&1 &
+    else
+	CPUS=$(sed -n 's/^# processors *: \([0-9]*\)/\1/p' /proc/cpuinfo)
+	(( CPUS * 2 ))
+
+	${DT_PROG} of=${MNT}/dt.scratch bs=4k incr=var min=4k max=256k errors=1 procs=$CPUS oncerr=abort disable=pstats disable=fsync oflags=trunc errors=1 dispose=keep pattern=iot iotype=random runtime=24h limit=4g log=/tmp/dt.log > /dev/null 2>&1 &
     fi
+}
 
-    CPUS=$(sed -n 's/^# processors *: \([0-9]*\)/\1/p' /proc/cpuinfo)
-    (( CPUS * 2 ))
-
-    nohup ${DT_PROG} of=${MNT}/dt.scratch bs=4k incr=var min=4k max=256k errors=1 procs=$CPUS oncerr=abort disable=pstats disable=fsync oflags=trunc errors=1 dispose=keep pattern=iot iotype=random runtime=24h limit=4g log=/tmp/dt.log > /dev/null 2>&1 &
+function stop_dt() {
+    if kill -TERM %run_dd ; then
+	wait %run_dd 2>/dev/null
+	killall -KILL dd
+    else
+	killall -KILL dt
+    fi
+    wait 2>/dev/null
 }
 
 function wait_for_sync () {

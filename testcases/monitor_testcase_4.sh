@@ -99,7 +99,7 @@ echo "$(date) MD status"
 mdadm --detail /dev/${MD_NUM}
 
 echo "$(date) Stop dt"
-killall -KILL dt 2> /dev/null
+stop_dt
 
 echo "$(date) Wait for sync"
 wait_for_sync ${MD_NUM}

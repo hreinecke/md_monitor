@@ -111,7 +111,7 @@ mdadm --detail /dev/${MD_NUM}
 
 if [ -z "$detach_other_half" ] ; then
     echo "$(date) Stop dt"
-    killall -KILL dt 2> /dev/null
+    stop_dt
 fi
 
 echo "$(date) Wait for sync"
@@ -178,7 +178,7 @@ if [ -n "$detach_other_half" ] ; then
     fi
     
     echo "$(date) Stop dt"
-    killall -KILL dt 2> /dev/null
+    stop_dt
 
     wait_for_sync ${MD_NUM}
     mdadm --detail /dev/${MD_NUM}
