@@ -43,6 +43,8 @@ run_dt /mnt;
 echo "$(date) vary off on chpid $CHPID_LEFT for the left side"
 logger "Vary off chpid $CHPID_LEFT"
 chchp -v 0 $CHPID_LEFT
+logger "Vary off path $CHPID_LEFT"
+chchp -c 0 $CHPID_LEFT
 
 echo "$(date) Ok. Waiting for MD to pick up changes ..."
 # Wait for md_monitor to pick up changes
@@ -69,6 +71,8 @@ sleep 10
 mdadm --detail /dev/${MD_NUM}
 
 echo "$(date) vary on chpid $CHPID_LEFT for the left side"
+logger "Vary on path $CHPID_LEFT"
+chchp -c 1 $CHPID_LEFT
 logger "Vary on chpid $CHPID_LEFT"
 chchp -v 1 $CHPID_LEFT
 
@@ -117,7 +121,10 @@ mdadm --detail /dev/${MD_NUM}
 
 if [ -n "$detach_other_half" ] ; then
     echo "$(date) vary off on chpid $CHPID_RIGHT for the right side"
+    logger "Vary off chpid $CHPID_RIGHT"
     chchp -v 0 $CHPID_RIGHT
+    logger "Vary off path $CHPID_RIGHT"
+    chchp -c 0 $CHPID_RIGHT
 
     echo "Ok. Waiting for MD to pick up changes ..."
     sleeptime=0
@@ -142,6 +149,9 @@ if [ -n "$detach_other_half" ] ; then
     mdadm --detail /dev/${MD_NUM}
     ls /mnt
     echo "$(date) vary on chpid $CHPID_RIGHT for the right side"
+    logger "Vary on path $CHPID_RIGHT"
+    chchp -c 1 $CHPID_RIGHT
+    logger "Vary on chpid $CHPID_RIGHT"
     chchp -v 1 $CHPID_RIGHT
 
     echo "Ok. Waiting for MD to pick up changes ..."
