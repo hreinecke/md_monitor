@@ -120,17 +120,22 @@ function activate_dasds() {
     local devno_max=$1
     local devno;
     local dasd;
-    # linux025 layout
-    # local DEVNOS_LEFT_START="0x0210"
-    # local DEVNOS_LEFT_END="0x0217"
-    # local DEVNOS_RIGHT_START="0x0220"
-    # local DEVNOS_RIGHT_END="0x0227"
-    # linux021 layout
     local DEVNO_LEFT_START="0xa000"
     local DEVNO_LEFT_END="0xa0c8"
     local DEVNO_RIGHT_START="0xa100"
     local DEVNO_RIGHT_END="0xa1c8"
     local i=0
+
+    userid=$(vmcp q userid | cut -f 1 -d ' ')
+    if [ "$userid" = "LINUX025" ] ; then
+        # linux025 layout
+	DEVNO_LEFT_START="0x0210"
+	DEVNO_LEFT_END="0x0217"
+	DEVNO_RIGHT_START="0x0220"
+	DEVNO_RIGHT_END="0x0227"
+    elif [ "$userid" != "LINUX021" ] ; then
+	error_exit "Cannot determine DASD layout for $userid"
+    fi
 
     # Use 8 DASDs per side per default
     if [ -z "$devno_max" ] ; then
