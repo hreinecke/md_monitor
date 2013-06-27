@@ -3,7 +3,7 @@
  *
  * Monitor DASD devices when MD is active
  *
- * Copyright (C) 2011 Hannes Reinecke <hare@suse.de>
+ * Copyright (C) 2011-2013 Hannes Reinecke <hare@suse.de>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -67,7 +67,7 @@
  #endif
 #endif
 
-const char version_str[] = "md_monitor version 4.24";
+const char version_str[] = "md_monitor version 4.25";
 
 enum md_rdev_status {
 	UNKNOWN,	/* Not checked */

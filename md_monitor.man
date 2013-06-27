@@ -1,4 +1,4 @@
-.TH "md_monitor" "8" "Tue Jun 4 2013" "md_monitor 4.24"
+.TH "md_monitor" "8" "Tue Jun 4 2013" "md_monitor 4.25"
 .de bu
 .IP \(bu
 ..
@@ -286,7 +286,7 @@ AUTO -all
 It is recommended to include these line when using md_monitor.
 
 .SH VERSIONS
-This manual page documents md_monitor version 4.24.
+This manual page documents md_monitor version 4.25.
 
 .SH FILES
 .TP
