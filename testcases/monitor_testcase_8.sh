@@ -36,7 +36,9 @@ echo "Run dt"
 run_dt /mnt
 
 echo "Invoke flashcopy"
-vmcp flashcopy a003 16 32 to a000 0 16
+DEVNO_DST=$(readlink /sys/block/${DASDS_LEFT[1]}/device)
+DEVNO_SRC=$(readlink /sys/block/${DASDS_LEFT[0]}/device)
+vmcp flashcopy ${DEVNO_DST##*.} 16 32 ${DEVNO_SRC##*.} 0 16
 
 echo "Waiting for MD to pick up changes ..."
 # Wait for md_monitor to pick up changes
@@ -44,7 +46,7 @@ sleeptime=0
 num=${#DASDS_LEFT[@]}
 while [ $sleeptime -lt $SLEEPTIME  ] ; do
     for d in ${DASDS_LEFT[@]} ; do
-	device=$(sed -n "s/${MD_NUM}.* \(${d}1\[[0-9]\](F)\).*/\1/p" /proc/mdstat)
+	device=$(sed -n "s/${MD_NUM}.* \(${d}1\[[0-9]*\](F)\).*/\1/p" /proc/mdstat)
 	if [ "$device" ] ; then
 	    (( num -- ))
 	fi
@@ -55,6 +57,7 @@ while [ $sleeptime -lt $SLEEPTIME  ] ; do
     (( sleeptime ++ ))
 done
 if [ $num -gt 0 ] ; then
+    stop_dt
     error_exit "MD monitor did not pick up changes after $sleeptime seconds"
 fi
 
