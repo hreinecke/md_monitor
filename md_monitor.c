@@ -705,7 +705,7 @@ enum md_rdev_status md_rdev_check_state(struct device_monitor *dev)
 	sprintf(attrpath, "/dev/%s", sysname);
 	ioctl_fd = open(attrpath, O_RDWR|O_NONBLOCK);
 	if (ioctl_fd < 0) {
-		warn("%s: cannot open %s: %m",
+		warn("%s: cannot open %s for MD ioctl: %m",
 		     dev->dev_name, attrpath);
 		return REMOVED;
 	}
@@ -924,7 +924,7 @@ static void dasd_timeout_ioctl(struct device_monitor *dev, int set)
 	}
 	ioctl_fd = open(devnode, O_RDWR);
 	if (ioctl_fd < 0) {
-		warn("%s: cannot open %s: %m",
+		warn("%s: cannot open %s for DASD ioctl: %m",
 		     dev->dev_name, devnode);
 		return;
 	}
@@ -953,7 +953,7 @@ static int dasd_setup_aio(struct device_monitor *dev)
 	if (devnode && dev->fd < 0)
 		dev->fd = open(devnode, O_RDONLY);
 	if (dev->fd  < 0) {
-		warn("%s: cannot open %s: %m", dev->dev_name, devnode);
+		warn("%s: cannot open %s for aio: %m", dev->dev_name, devnode);
 		return 2;
 	}
 	flags = fcntl(dev->fd, F_GETFL);
