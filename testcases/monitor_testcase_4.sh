@@ -18,6 +18,7 @@ activate_dasds
 clear_metadata
 
 modprobe vmcp
+userid=$(vmcp q userid | cut -f 1 -d ' ')
 
 ulimit -c unlimited
 start_md ${MD_NUM}
@@ -67,8 +68,11 @@ mdadm --detail /dev/${MD_NUM}
 
 echo "$(date) Re-attach disk on first half ..."
 for devno in $DEVNOS_LEFT ; do
-    # vmcp link \* ${devno##*.} ${devno##*.}
-    vmcp att ${devno##*.} \*
+    if [ "$userid" = "LINUX025" ] ; then
+	vmcp link \* ${devno##*.} ${devno##*.}
+    else
+	vmcp att ${devno##*.} \*
+    fi
     break
 done
 
@@ -137,8 +141,11 @@ if [ "$detach_other_half" ] ; then
     ls /mnt
     echo "Re-attach disk on second half ..."
     for devno in $DEVNOS_RIGHT ; do
-	# vmcp link \* ${devno##*.} ${devno##*.}
-	vmcp att ${devno##*.} \*
+	if [ "$userid" = "LINUX025" ] ; then
+	    vmcp link \* ${devno##*.} ${devno##*.}
+	else
+	    vmcp att ${devno##*.} \*
+	fi
 	break;
     done
 
