@@ -33,6 +33,16 @@ fi
 echo "$(date) Run dt"
 run_dt /mnt;
 
+for devno in ${DEVNOS_LEFT} ; do
+    echo "$(date) Reserve DASD $devno on left half ..."
+    result=$(wget -nv --max-redirect=0 "http://s390vsl026.suse.de/dasd.php?ccw=${devno}&action=Reserve" 2>&1)
+    if [ "$result" != "0 redirections exceeded." ] ; then
+	echo "$(date) Reserve DASD $devno failed; wget returned:"
+	echo "$result"
+    fi
+    break;
+done
+
 echo "$(date) Wait for reservation on left half ..."
 num=0
 while [ $num -eq 0 ] ; do
@@ -71,6 +81,15 @@ mdadm --detail /dev/${MD_NUM}
 echo "$(date) Wait for $IO_TIMEOUT seconds"
 sleep $IO_TIMEOUT
 
+for devno in ${DEVNOS_LEFT} ; do
+    echo "$(date) Release DASD $devno on left half ..."
+    result=$(wget -nv --max-redirect=0 "http://s390vsl026.suse.de/dasd.php?ccw=${devno}&action=Release" 2>&1 )
+    if [ "$result" != "0 redirections exceeded." ] ; then
+	echo "$(date) Reserve DASD $devno failed; wget returned:"
+	echo "$result"
+    fi
+    break;
+done
 echo "$(date) Wait for reservations to be cleared ..."
 num=${#DASDS_LEFT[@]}
 while [ $num -gt 0 ] ; do
