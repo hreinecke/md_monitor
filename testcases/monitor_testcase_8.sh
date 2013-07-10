@@ -32,8 +32,8 @@ if ! mount /dev/${MD_NUM} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
 
-echo "Run dt"
-run_dt /mnt
+echo "Run I/O test"
+run_iotest /mnt
 
 echo "Invoke flashcopy"
 DEVNO_DST=$(readlink /sys/block/${DASDS_LEFT[1]}/device)
@@ -63,8 +63,8 @@ fi
 
 echo "MD monitor picked up changes after $sleeptime seconds"
 
-echo "Stop dt"
-stop_dt
+echo "Stop I/O test"
+stop_iotest
 
 # Wait for sync to complete
 sleep 5

@@ -30,8 +30,8 @@ if ! mount /dev/${MD_NUM} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
 
-echo "$(date) Run dt"
-run_dt /mnt;
+echo "$(date) Run I/O test"
+run_iotest /mnt;
 
 for devno in ${DEVNOS_LEFT} ; do
     echo "$(date) Reserve DASD $devno on left half ..."
@@ -132,8 +132,8 @@ fi
 echo "$(date) MD status"
 mdadm --detail /dev/${MD_NUM}
 
-echo "$(date) Stop dt"
-stop_dt
+echo "$(date) Stop I/O test"
+stop_iotest
 
 echo "$(date) Wait for sync ..."
 wait_for_sync ${MD_NUM}

@@ -75,12 +75,13 @@ function start_md() {
     rm /var/log/messages
     rcsyslog restart
     MONITOR_PID=$(/sbin/md_monitor -y -p 7 -d -s)
+    trapcmd="stop_iotest"
     if [ -n "$MONITOR_PID" ] ; then
-	trapcmd="${MD_MONITOR} -c'Shutdown:/dev/console'"
+	trapcmd="$trapcmd ; ${MD_MONITOR} -c'Shutdown:/dev/console'"
     fi
     MDADM_PID=$(mdadm --monitor --scan --daemonise)
     if [ -n "$MDADM_PID" ] ; then
-	trapcmd="$trapcmd${trapcmd:+ ; }kill -TERM $MDADM_PID"
+	trapcmd="$trapcmd ; kill -TERM $MDADM_PID"
     fi
     if [ -n "$trapcmd" ] ; then
 	trap "$trapcmd" EXIT
@@ -241,16 +242,26 @@ function clear_metadata() {
 }
 
 function run_dd() {
-    local MNT=$1
-    local BLKS=$2
+    local PRG=$1
+    local MNT=$2
+    local BLKS=$3
+    local SIZE
+    local CPUS
 
-    while true ; do
-	dd if=/dev/random of=${MNT}/dd.scratch bs=4k count=${BLKS}
-	dd if=${MNT}/dd.scratch of=/dev/null bs=4k count=${BLKS}
-    done
+    if [ "$PRG" = "dt" ] ; then
+	CPUS=$(sed -n 's/^# processors *: \([0-9]*\)/\1/p' /proc/cpuinfo)
+	(( CPUS * 2 ))
+	SIZE=$(( $BLKS * 4096 ))
+	${DT_PROG} of=${MNT}/dt.scratch bs=4k incr=var min=4k max=256k errors=1 procs=$CPUS oncerr=abort disable=pstats disable=fsync oflags=trunc errors=1 dispose=keep pattern=iot iotype=random runtime=24h limit=${SIZE} log=/tmp/dt.log > /dev/null 2>&1
+    else
+	while true ; do
+	    dd if=/dev/random of=${MNT}/dd.scratch bs=4k count=${BLKS}
+	    dd if=${MNT}/dd.scratch of=/dev/null bs=4k count=${BLKS}
+	done
+    fi
 }
 
-function run_dt() {
+function run_iotest() {
     local MNT=$1
     local DT_PROG
     local CPUS
@@ -258,30 +269,33 @@ function run_dt() {
 
     DT_PROG=$(which dt 2> /dev/null)
 
+    BLKS=$(df | sed -n "s/[a-z/]*[0-9]* *[0-9]* *[0-9]* *\([0-9]*\) *[0-9]*% *.*${MNT##*/}/\1/p")
+    if [ -z "$BLKS" ] ; then
+	echo "Device $MNT not found"
+	exit 1
+    fi
+    BLKS=$(( BLKS >> 3 ))
     if [ -z "$DT_PROG" ] ; then
-	BLKS=$(df | sed -n "s/[a-z/]*[0-9]* *[0-9]* *[0-9]* *\([0-9]*\) *[0-9]*% *.*${MNT##*/}/\1/p")
-	if [ -z "$BLKS" ] ; then
-	    echo "Device $MNT not found"
-	    exit 1
-	fi
-	BLKS=$(( BLKS >> 3 ))
-	run_dd $MNT $BLKS > /tmp/dt.log 2>&1 &
+	run_dd "dd" $MNT $BLKS > /tmp/dt.log 2>&1 &
     else
-	CPUS=$(sed -n 's/^# processors *: \([0-9]*\)/\1/p' /proc/cpuinfo)
-	(( CPUS * 2 ))
-
-	${DT_PROG} of=${MNT}/dt.scratch bs=4k incr=var min=4k max=256k errors=1 procs=$CPUS oncerr=abort disable=pstats disable=fsync oflags=trunc errors=1 dispose=keep pattern=iot iotype=random runtime=24h limit=4g log=/tmp/dt.log > /dev/null 2>&1 &
+	run_dd "dt" $MNT $BLKS > /tmp/dt.log 2>&1 &
     fi
 }
 
-function stop_dt() {
-    if kill -TERM %run_dd ; then
+function stop_iotest() {
+    DT_PROG=$(which dt 2> /dev/null);
+
+    if kill -TERM %run_dd 2> /dev/null ; then
 	wait %run_dd 2>/dev/null
-	killall -KILL dd
-    else
-	killall -KILL dt
+	if [ -z "$DT_PROG" ] ; then
+	    PRG="dd"
+	else
+	    PRG="dt"
+	fi
+	if killall -KILL ${PRG} ; then
+	    wait 2>/dev/null
+	fi
     fi
-    wait 2>/dev/null
 }
 
 function wait_for_sync () {

@@ -37,8 +37,8 @@ if ! mount /dev/${MD_NUM} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
 
-echo "$(date) Run dt"
-run_dt /mnt;
+echo "$(date) Run I/O test"
+run_iotest /mnt;
 
 echo "$(date) vary off on chpid $CHPID_LEFT for the left side"
 logger "Vary off chpid $CHPID_LEFT"
@@ -110,8 +110,8 @@ echo "$(date) MD status"
 mdadm --detail /dev/${MD_NUM}
 
 if [ -z "$detach_other_half" ] ; then
-    echo "$(date) Stop dt"
-    stop_dt
+    echo "$(date) Stop I/O test"
+    stop_iotest
 fi
 
 echo "$(date) Wait for sync"
@@ -177,8 +177,8 @@ if [ -n "$detach_other_half" ] ; then
 	echo "ERROR: $num devices are still faulty"
     fi
     
-    echo "$(date) Stop dt"
-    stop_dt
+    echo "$(date) Stop I/O test"
+    stop_iotest
 
     wait_for_sync ${MD_NUM}
     mdadm --detail /dev/${MD_NUM}
