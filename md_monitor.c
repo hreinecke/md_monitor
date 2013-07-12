@@ -576,7 +576,7 @@ static void detach_dasd(struct udev_device *dev)
 		return;
 	lock_device_list();
 	list_for_each_entry(tmp, &device_list, entry) {
-		if (!strncmp(tmp->dev_name, dasd_name, strlen(dasd_name))) {
+		if (!strcmp(tmp->dev_name, dasd_name)) {
 			list_del_init(&tmp->entry);
 			found = tmp;
 			break;
