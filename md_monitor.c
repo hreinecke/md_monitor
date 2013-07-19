@@ -1504,9 +1504,26 @@ static void reset_mirror(struct device_monitor *dev)
 		return;
 	}
 	if (dev->md_slot == -1) {
-		info("%s: device removed, no slot information",
-		     dev->dev_name);
-		return;
+		int nr_devs[2];
+
+		memset(nr_devs, 0, sizeof(int) * 2);
+		list_for_each_entry(tmp, &md_dev->children, siblings) {
+			int this_side;
+
+			if (tmp->md_slot < 0)
+				continue;
+			this_side = tmp->md_slot % (md_dev->layout & 0xFF);
+			nr_devs[this_side]++;
+		}
+		if (nr_devs[0] == 0) {
+			side = 0;
+		} else if (nr_devs[1] == 0) {
+			side = 1;
+		} else {
+			info("%s: device removed, no slot information",
+			     dev->dev_name);
+			return;
+		}
 	}
 	side = dev->md_slot % (md_dev->layout & 0xFF);
 	pthread_mutex_lock(&md_dev->lock);
