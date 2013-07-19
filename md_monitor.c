@@ -118,6 +118,7 @@ struct md_monitor {
 	int layout;
 	int in_recovery;
 	int degraded;
+	int in_discovery;
 };
 
 struct device_monitor {
@@ -1171,7 +1172,8 @@ void *dasd_monitor_thread (void *ctx)
 			 * Check whether we need to fail the mirror.
 			 */
 			pthread_mutex_unlock(&dev->lock);
-			info("%s: path checker interrupted", dev->dev_name);
+			info("%s: path checker interrupted, new state %s",
+			     dev->dev_name, md_rdev_print_state(new_status));
 			if (new_status == FAULTY || new_status == TIMEOUT) {
 				fail_mirror(dev, new_status);
 			}
@@ -1419,7 +1421,11 @@ static void fail_mirror(struct device_monitor *dev, enum md_rdev_status status)
 		warn("%s: No md device found", dev->dev_name);
 		return;
 	}
-
+	md_name = udev_device_get_sysname(md_dev->device);
+	if (md_dev->in_discovery) {
+		info("%s: md in discovery, not failing mirror", md_name);
+		return;
+	}
 	if (!fail_mirror_side || status == REMOVED) {
 		fail_component(md_dev, dev, status);
 		return;
@@ -1430,7 +1436,6 @@ static void fail_mirror(struct device_monitor *dev, enum md_rdev_status status)
 		pthread_mutex_unlock(&md_dev->lock);
 		return;
 	}
-	md_name = udev_device_get_sysname(md_dev->device);
 	if (dev->md_slot < 0) {
 		int nr_devs[2];
 
@@ -1640,10 +1645,12 @@ static void discover_md_components(struct md_monitor *md)
 		return;
 	}
 
+	md->in_discovery = 1;
 	sprintf(mdpath, "/dev/%s", mdname);
 	ioctl_fd = open(mdpath, O_RDWR|O_NONBLOCK);
 	if (ioctl_fd < 0) {
 		warn("%s: Couldn't open %s: %m", mdname, mdpath);
+		md->in_discovery = 0;
 		return;
 	}
 	/* Temporarily move children devices onto a separate list */
@@ -1742,6 +1749,7 @@ static void discover_md_components(struct md_monitor *md)
 		info("%s: skip stale device detection, array in recovery",
 		     mdname);
 	}
+	md->in_discovery = 0;
 	close(ioctl_fd);
 }
 
