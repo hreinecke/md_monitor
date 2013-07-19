@@ -1540,6 +1540,8 @@ static void reset_mirror(struct device_monitor *dev)
 		dbg("%s: dev %s side %d state %s / %s", md_name, tmp->dev_name,
 		     this_side, md_rdev_print_state(tmp->md_status),
 		     dasd_io_print_state(tmp->io_status));
+		if (tmp->md_status == RECOVERY)
+			continue;
 		if (this_side != side)
 			ready_devices++;
 		else if (tmp->io_status == IO_OK)
