@@ -280,7 +280,7 @@ static int reset_component(struct device_monitor *);
 static void fail_mirror(struct device_monitor *, enum md_rdev_status);
 static void reset_mirror(struct device_monitor *);
 static void discover_md_components(struct md_monitor *md);
-static void remove_md_component(struct md_monitor *md_dev,
+static void remove_md_component(const char *mdname,
 				struct device_monitor *dev);
 static int dasd_set_attribute(struct device_monitor *dev, const char *attr,
 			      int value);
@@ -592,7 +592,8 @@ static void detach_dasd(struct udev_device *dev)
 
 			md_dev = lookup_md(found->parent, 0);
 			if (md_dev) {
-				remove_md_component(md_dev, found);
+				const char *mdname = udev_device_get_sysname(md_dev->device);
+				remove_md_component(mdname, found);
 				remove_component(found);
 			}
 		}
@@ -1619,10 +1620,9 @@ static void sync_md_component(struct md_monitor *md_dev,
 	monitor_dasd(dev);
 }
 
-static void remove_md_component(struct md_monitor *md_dev,
+static void remove_md_component(const char *md_name,
 				struct device_monitor *dev)
 {
-	const char *md_name = udev_device_get_sysname(md_dev->device);
 	pthread_t thread;
 
 	pthread_mutex_lock(&dev->lock);
@@ -1759,7 +1759,7 @@ static void discover_md_components(struct md_monitor *md)
 		list_for_each_entry_safe(found, tmp, &update_list, siblings) {
 			info("%s: Remove stale device",
 			     found->dev_name);
-			remove_md_component(md, found);
+			remove_md_component(mdname, found);
 			remove_component(found);
 		}
 	} else {
@@ -1847,6 +1847,7 @@ static void reset_md(struct md_monitor *md_dev)
 
 static void remove_md(struct md_monitor *md_dev)
 {
+	const char *mdname = udev_device_get_sysname(md_dev->device);
 	struct udev_device *device = md_dev->device;
 	struct device_monitor *dev, *tmp;
 	struct list_head remove_list;
@@ -1860,7 +1861,7 @@ static void remove_md(struct md_monitor *md_dev)
 	list_for_each_entry_safe(dev, tmp, &remove_list, siblings) {
 		info("%s: Remove MD component device",
 		     dev->dev_name);
-		remove_md_component(md_dev, dev);
+		remove_md_component(mdname, dev);
 		remove_component(dev);
 	}
 
@@ -2522,7 +2523,7 @@ void *cli_monitor_thread(void *ctx)
 			}
 		} else if (!strcmp(event, "Remove")) {
 			if (dev) {
-				remove_md_component(md_dev, dev);
+				remove_md_component(mdstr, dev);
 				remove_component(dev);
 				buf[0] = 0;
 				iov.iov_len = 0;
