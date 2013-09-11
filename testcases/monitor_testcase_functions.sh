@@ -66,7 +66,7 @@ function start_md() {
     fi
 
     mdadm --wait ${MD_DEVNAME}
-    mdadm --detail ${MD_DEVNAME}
+    mdadm --detail ${MD_DEVNAME} | sed '/Update Time/D;/Events/D' | tee /tmp/monitor_${MD_NAME}_mdstat_start.log
     echo "POLICY action=re-add" > /etc/mdadm.conf
     echo "AUTO -all" >> /etc/mdadm.conf
     mdadm --brief --detail ${MD_DEVNAME} >> /etc/mdadm.conf
@@ -92,13 +92,20 @@ function start_md() {
 
 function stop_md() {
     local md
+    local md_detail
     local cur_md=$1
-    local MD_NAME
 
-    MD_NAME=$(mdadm --detail /dev/${cur_md} | sed -n 's/ *Name : [^:]*:\([^ ]*\) (local .*)/\1/p')
-    if [ -z "$MD_NAME" ] ; then
-	MD_NAME="testcase"
+    if ! grep -q ${cur_md} /proc/mdstat ; then
+	return
     fi
+    START_LOG="/tmp/monitor_${MD_NAME}_mdstat_start.log"
+    STOP_LOG="/tmp/monitor_${MD_NAME}_mdstat_stop.log"
+    mdadm --detail /dev/${cur_md} | sed '/Update Time/D;/Events/D' | tee ${STOP_LOG}
+    if ! diff -pu ${START_LOG} ${STOP_LOG} ; then
+	echo "MD array configuration inconsistent"
+	exit 1
+    fi
+    rm -f ${START_LOG} ${STOP_LOG}
     for md in $(sed -n 's/^\(md[0-9]*\) .*/\1/p' /proc/mdstat) ; do
 	if [ "$md" = "$cur_md" ] ; then
 	    if grep -q /dev/$md /proc/mounts ; then
@@ -127,7 +134,10 @@ function activate_dasds() {
     local DEVNO_RIGHT_END="0xa1c8"
     local i=0
 
-    userid=$(vmcp q userid | cut -f 1 -d ' ')
+    if ! grep -q vmcp /proc/modules ; then
+	modprobe vmcp
+    fi
+    userid=$(vmcp q userid 2> /dev/null | cut -f 1 -d ' ')
     if [ "$userid" = "LINUX025" ] ; then
         # linux025 layout
 	DEVNO_LEFT_START="0x0210"
