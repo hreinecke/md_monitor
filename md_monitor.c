@@ -491,13 +491,15 @@ static void dasd_monitor_put(struct device_monitor *dev)
 static void attach_dasd(struct udev_device *dev)
 {
 	struct md_monitor *found_md = NULL;
+	struct udev_device *dasd_dev = NULL;
 	struct device_monitor *tmp, *found = NULL;
-	const char *dasd_devtype;
+	const char *dasd_devtype, *alias;
 	const char *devname = udev_device_get_sysname(dev);
 	char devpath[256];
 	DIR *dirp;
 	struct dirent *dirfd;
 
+	dasd_dev = udev_device_get_parent(dev);
 	dasd_devtype = udev_device_get_devtype(dev);
 	dbg("dev %s devtype %s", devname, dasd_devtype);
 	if (!dasd_devtype || !strncmp(dasd_devtype, "disk", 4)) {
@@ -505,7 +507,12 @@ static void attach_dasd(struct udev_device *dev)
 		info("%s: not a partition, ignore", devname);
 		return;
 	}
-
+	alias = udev_device_get_sysattr_value(dasd_dev, "alias");
+	if (alias && alias[0] == '1') {
+		/* Alias device, ignore */
+		info("%s: aliased device, ignore", devname);
+		return;
+	}
 	sprintf(devpath, "%s/holders",
 		udev_device_get_syspath(dev));
 	dirp = opendir(devpath);
@@ -700,16 +707,16 @@ enum md_rdev_status md_rdev_check_state(struct device_monitor *dev)
 	const char *sysname;
 
 	if (!dev)
-		return REMOVED;
+		return UNKNOWN;
 	sysname = udev_device_get_sysname(dev->parent);
 	if (!sysname)
-		return REMOVED;
+		return UNKNOWN;
 	sprintf(attrpath, "/dev/%s", sysname);
 	ioctl_fd = open(attrpath, O_RDWR|O_NONBLOCK);
 	if (ioctl_fd < 0) {
 		warn("%s: cannot open %s for MD ioctl: %m",
 		     dev->dev_name, attrpath);
-		return REMOVED;
+		return UNKNOWN;
 	}
 	info.number = dev->md_index;
 	if (ioctl(ioctl_fd, GET_DISK_INFO, &info) < 0) {
@@ -1157,7 +1164,7 @@ void *dasd_monitor_thread (void *ctx)
 		}
 		/* Re-check; status might have been changed during aio */
 		md_status = md_rdev_check_state(dev);
-		if (md_status == REMOVED) {
+		if (md_status == UNKNOWN) {
 			/* array has been stopped */
 			pthread_mutex_lock(&dev->lock);
 			break;
@@ -1582,7 +1589,9 @@ static void fail_md_component(struct md_monitor *md_dev,
 	info("%s: notify for device state change", dev->dev_name);
 
 	md_status = md_rdev_check_state(dev);
-	if (md_status == REMOVED || md_status == SPARE) {
+	if (md_status == UNKNOWN ||
+	    md_status == REMOVED ||
+	    md_status == SPARE) {
 		warn("%s: device status %s", dev->dev_name,
 		     md_rdev_print_state(md_status));
 		return;
@@ -1877,46 +1886,58 @@ static void remove_md(struct md_monitor *md_dev)
 	free(md_dev);
 }
 
-static int monitor_md(struct udev_device *md_dev)
+static int check_md(struct udev_device *md_dev, mdu_array_info_t *info)
 {
-	struct md_monitor *found = NULL;
 	char devpath[256];
 	const char *devname;
-	mdu_array_info_t info;
 	int ioctl_fd;
 
 	devname = udev_device_get_sysname(md_dev);
 	if (!devname || !strlen(devname))
 		return ENODEV;
 
-	memset(&info, 0, sizeof(mdu_array_info_t));
 	sprintf(devpath, "/dev/%s", devname);
 	ioctl_fd = open(devpath, O_RDWR|O_NONBLOCK);
 	if (ioctl_fd >= 0) {
-		if (ioctl(ioctl_fd, GET_ARRAY_INFO, &info) < 0) {
+		if (ioctl(ioctl_fd, GET_ARRAY_INFO, info) < 0) {
 			if (errno == ENODEV)
 				info("%s: array stopped, ignoring", devname);
 			else
 				err("%s: ioctl GET_ARRAY_INFO failed: %m",
 				    devname);
-			info.raid_disks = 0;
-		} else if (info.raid_disks == 0) {
+			info->raid_disks = 0;
+		} else if (info->raid_disks == 0) {
 			warn("%s: no RAID disks, ignoring", devname);
 			errno = EAGAIN;
 		}
 		close(ioctl_fd);
 	} else {
 		err("%s: could not open %s: %m", devname, devpath);
-		info.raid_disks = 0;
+		info->raid_disks = 0;
 	}
-	if (info.raid_disks < 1)
+	if (info->raid_disks < 1)
 		return errno;
 
-	if (info.level != 10) {
+	if (info->level != 10) {
 		err("%s: not a RAID10 array", devname);
 		return EINVAL;
 	}
+	return 0;
+}
 
+static int monitor_md(struct udev_device *md_dev)
+{
+	const char *devname;
+	int rc;
+	mdu_array_info_t info;
+	struct md_monitor *found = NULL;
+
+	memset(&info, 0, sizeof(mdu_array_info_t));
+	rc = check_md(md_dev, &info);
+	if (rc)
+		return rc;
+
+	devname = udev_device_get_sysname(md_dev);
 	found = lookup_md_new(md_dev);
 	if (found->raid_disks < 0) {
 		warn("%s: Start monitoring %s", devname,
@@ -2036,16 +2057,34 @@ static int display_io_status(struct md_monitor *md_dev, char *buf, int buflen)
 static int display_md(struct md_monitor *md_dev, char *buf)
 {
 	struct device_monitor *dev;
+	mdu_array_info_t info;
 	char status[4096];
 	int bufsize = 0, len = 0;
+	int rc;
 
 	pthread_mutex_lock(&md_dev->lock);
 	if (!md_dev->device) {
 		pthread_mutex_unlock(&md_dev->lock);
 		return -ENODEV;
 	}
+	rc = check_md(md_dev->device, &info);
+	if (rc) {
+		pthread_mutex_unlock(&md_dev->lock);
+		return rc;
+	}
 	buf[0] = '\0';
 	list_for_each_entry(dev, &md_dev->children, siblings) {
+		enum md_rdev_status md_status;
+
+		md_status = md_rdev_check_state(dev);
+		if (md_status == UNKNOWN) {
+			/* array has been stopped */
+			bufsize = -1;
+			break;
+		}
+		pthread_mutex_lock(&dev->lock);
+		md_rdev_update_state(dev, md_status);
+		pthread_mutex_unlock(&dev->lock);
 		len = sprintf(status, "%s: dev %s slot %d/%d status %s %s\n",
 			       udev_device_get_sysname(md_dev->device),
 			       dev->dev_name, dev->md_slot, md_dev->raid_disks,
