@@ -31,7 +31,10 @@ fi
 
 echo "Write test file ..."
 dd if=/dev/zero of=/mnt/testfile1 bs=4096 count=1024
-md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
+MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
+md_monitor -c"ArrayStatus:/dev/${MD_NUM}" | tee ${MD_LOG1}
+MD_LOG2="/tmp/monitor_${MD_NAME}_step2.log"
+ls -l /mnt | tee ${MD_LOG2}
 sleep 5
 echo "Umount filesystem ..."
 umount /mnt
@@ -47,18 +50,27 @@ mdadm --assemble /dev/${MD_NUM}
 mdadm --wait /dev/${MD_NUM}
 # md_monitor needs some time to pick up array data
 sleep 1
-md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
+MD_LOG3="/tmp/monitor_${MD_NAME}_step3.log"
+md_monitor -c"ArrayStatus:/dev/${MD_NUM}" | tee ${MD_LOG3}
+if ! diff ${MD_LOG1} ${MD_LOG3} ;then
+    error_exit "Monitor status mismatch"
+fi
 
 echo "Remount filesystem ..."
 if ! mount /dev/${MD_NUM} /mnt ; then
     error_exit "Cannot re-mount MD array."
 fi
 
-ls -l /mnt
+MD_LOG4="/tmp/monitor_${MD_NAME}_step4.log"
+ls -l /mnt | tee ${MD_LOG4}
 
+if ! diff ${MD_LOG2} ${MD_LOG4} ; then
+    error_exit "Filesystem contents differ"
+fi
 sleep 5
 
 echo "Umount filesystem ..."
 umount /mnt
 
+rm -f /tmp/monitor_${MD_NAME}_step*.log
 stop_md ${MD_NUM}
