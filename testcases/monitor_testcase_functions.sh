@@ -66,7 +66,8 @@ function start_md() {
     fi
 
     mdadm --wait ${MD_DEVNAME}
-    mdadm --detail ${MD_DEVNAME} | sed '/Update Time/D;/Events/D' | tee /tmp/monitor_${MD_NAME}_mdstat_start.log
+    START_LOG="/tmp/monitor_${MD_NAME}_mdstat_start.log"
+    mdadm --detail ${MD_DEVNAME} | sed '/Update Time/D;/Events/D' | tee ${START_LOG}
     echo "POLICY action=re-add" > /etc/mdadm.conf
     echo "AUTO -all" >> /etc/mdadm.conf
     mdadm --brief --detail ${MD_DEVNAME} >> /etc/mdadm.conf
@@ -98,12 +99,13 @@ function stop_md() {
     if ! grep -q ${cur_md} /proc/mdstat ; then
 	return
     fi
-    START_LOG="/tmp/monitor_${MD_NAME}_mdstat_start.log"
     STOP_LOG="/tmp/monitor_${MD_NAME}_mdstat_stop.log"
-    mdadm --detail /dev/${cur_md} | sed '/Update Time/D;/Events/D' | tee ${STOP_LOG}
-    if ! diff -pu ${START_LOG} ${STOP_LOG} ; then
-	echo "MD array configuration inconsistent"
-	exit 1
+    if [ -n "${START_LOG}" ] ; then
+	mdadm --detail /dev/${cur_md} | sed '/Update Time/D;/Events/D' | tee ${STOP_LOG}
+	if ! diff -u ${START_LOG} ${STOP_LOG} ; then
+	    echo "MD array configuration inconsistent"
+	    exit 1
+	fi
     fi
     rm -f ${START_LOG} ${STOP_LOG}
     for md in $(sed -n 's/^\(md[0-9]*\) .*/\1/p' /proc/mdstat) ; do
