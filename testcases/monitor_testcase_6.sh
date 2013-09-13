@@ -126,7 +126,7 @@ done
 if [ $num -eq 0 ] ; then
     echo "$(date) MD monitor picked up changes after $sleeptime seconds"
 else
-    echo "$(date) MD monitor did not pick up changes after $sleeptime seconds"
+    error_exit "$(date) MD monitor did not pick up changes after $sleeptime seconds"
 fi
 
 echo "$(date) MD status"
