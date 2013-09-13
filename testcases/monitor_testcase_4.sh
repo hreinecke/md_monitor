@@ -60,11 +60,15 @@ if [ $sleeptime -lt $MONITOR_TIMEOUT ] ; then
     echo "$(date) MD monitor picked up changes after $sleeptime seconds"
 else
     echo "$(date) ERROR: $working_disks / $raid_disks are still working"
+    # test failed but bail out after re-attaching the disk
+    TEST_FAILED=1
 fi
 
-echo "$(date) Wait for 10 seconds"
-sleep 10
-mdadm --detail /dev/${MD_NUM}
+if [ -z "$TEST_FAILED" ] ; then
+    echo "$(date) Wait for 10 seconds"
+    sleep 10
+    mdadm --detail /dev/${MD_NUM}
+fi
 
 echo "$(date) Re-attach disk on first half ..."
 for devno in $DEVNOS_LEFT ; do
@@ -75,6 +79,8 @@ for devno in $DEVNOS_LEFT ; do
     fi
     break
 done
+
+[ -n "$TEST_FAILED" ] && error_exit "TEST FAILED DUE TO THE ABOVE TIMEOUT ERROR"
 
 echo "$(date) Ok. Waiting for MD to pick up changes ..."
 # Wait for md_monitor to pick up changes
@@ -96,7 +102,7 @@ done
 if [ $sleeptime -lt $MONITOR_TIMEOUT ] ; then
     echo "$(date) MD monitor picked up changes after $sleeptime seconds"
 else
-    echo "$(date) ERROR: $num devices are still faulty"
+    error_exit "$(date) ERROR: $num devices are still faulty"
 fi
 
 echo "$(date) MD status"
@@ -108,7 +114,11 @@ stop_iotest
 echo "$(date) Wait for sync"
 wait_for_sync ${MD_NUM}
 
-mdadm --detail /dev/${MD_NUM}
+MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
+mdadm --detail /dev/${MD_NUM} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG1}
+if ! diff -u "${START_LOG}" "${MD_LOG1}" ; then
+    error_exit "current ${MD_NUM} state differs after test but should be identical to initial state"
+fi
 
 if [ "$detach_other_half" ] ; then
     echo "Detach disk on second half ..."
@@ -117,7 +127,7 @@ if [ "$detach_other_half" ] ; then
 	break;
     done
 
-    echo "Ok. Waiting for MD to pick up changes ..."
+    echo "$(date) Ok. Waiting for MD to pick up changes ..."
     sleeptime=0
     while [ $sleeptime -lt 60  ] ; do
 	raid_status=$(sed -n 's/.*\[\([0-9]*\/[0-9]*\)\].*/\1/p' /proc/mdstat)
@@ -131,9 +141,10 @@ if [ "$detach_other_half" ] ; then
 	(( sleeptime ++ ))
     done
     if [ $sleeptime -lt $MONITOR_TIMEOUT ] ; then
-	echo "MD monitor picked up changes after $sleeptime seconds"
+	echo "$(date) MD monitor picked up changes after $sleeptime seconds"
     else
-	echo "ERROR: $working_disks / $raid_disks are still working"
+	echo "$(date) ERROR: $working_disks / $raid_disks are still working"
+	TEST_FAILED=1
     fi
 
     sleep 5
@@ -149,7 +160,9 @@ if [ "$detach_other_half" ] ; then
 	break;
     done
 
-    echo "Ok. Waiting for MD to pick up changes ..."
+    [ -n "$TEST_FAILED" ] && error_exit "TEST FAILED DUE TO THE ABOVE TIMEOUT ERROR"
+
+    echo "$(date) Ok. Waiting for MD to pick up changes ..."
     # Wait for md_monitor to pick up changes
     sleeptime=0
     num=${#DASDS_LEFT[@]}
@@ -167,9 +180,9 @@ if [ "$detach_other_half" ] ; then
 	(( sleeptime ++ ))
     done
     if [ $sleeptime -lt $MONITOR_TIMEOUT ] ; then
-	echo "MD monitor picked up changes after $sleeptime seconds"
+	echo "$(date) MD monitor picked up changes after $sleeptime seconds"
     else
-	echo "ERROR: $num devices are still faulty"
+	error_exit "$(date) ERROR: $num devices are still faulty"
     fi
     
     wait_for_sync ${MD_NUM}
