@@ -100,6 +100,15 @@ sleep 6
 mdadm --detail /dev/${MD_NUM}
 ls -l /mnt
 
+diff -u /dev/stdin <(stat --printf='%n %s\n' /mnt/testfile*) <<EOE
+/mnt/testfile1 4194304
+/mnt/testfile2 4194304
+/mnt/testfile3 4194304
+EOE
+if [ $? -ne 0 ] ; then
+    error_exit "test file inconsistency found"
+fi
+
 echo "Umount filesystem ..."
 umount /mnt
 
