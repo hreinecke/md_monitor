@@ -36,12 +36,21 @@ echo "Fail first half ..."
 mdadm --manage /dev/${MD_NUM} --fail ${DEVICES_LEFT[@]}
 mdadm --detail /dev/${MD_NUM}
 sleep 10
-mdadm --detail /dev/${MD_NUM}
+MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
+mdadm --detail /dev/${MD_NUM} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG1}
+if ! diff -u "${START_LOG}" "${MD_LOG1}" ; then
+    error_exit "current ${MD_NUM} state differs after test but should be identical to initial state"
+fi
 echo "Fail second half ..."
 mdadm --manage /dev/${MD_NUM} --fail ${DEVICES_RIGHT[@]}
 mdadm --detail /dev/${MD_NUM}
 sleep 10
-mdadm --detail /dev/${MD_NUM}
+MD_LOG2="/tmp/monitor_${MD_NAME}_step2.log"
+mdadm --detail /dev/${MD_NUM} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG2}
+if ! diff -u "${START_LOG}" "${MD_LOG2}" ; then
+    error_exit "current ${MD_NUM} state differs after test but should be identical to initial state"
+fi
+rm -f ${MD_LOG1} ${MD_LOG2}
 
 echo "Umount filesystem ..."
 umount /mnt
