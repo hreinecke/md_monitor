@@ -89,7 +89,7 @@ echo "Write test file 3 ..."
 dd if=/dev/zero of=/mnt/testfile3 bs=4096 count=1024
 sleep 5
 mdadm --detail /dev/${MD_NUM}
-ls /mnt
+ls -l /mnt
 echo "Restart second half ..."
 for devno in $DEVNOS_RIGHT ; do
     if ! echo 1 > /sys/bus/ccw/devices/$devno/online ; then
