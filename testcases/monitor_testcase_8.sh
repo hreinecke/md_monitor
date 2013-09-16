@@ -32,7 +32,7 @@ if ! mount /dev/${MD_NUM} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
 MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
-mdadm --detail /dev/md1 | grep Devices > ${MD_LOG1}
+mdadm --detail /dev/${MD_NUM} | grep Devices > ${MD_LOG1}
 
 echo "Run I/O test"
 run_iotest /mnt
