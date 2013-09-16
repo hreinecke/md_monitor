@@ -29,9 +29,13 @@ if ! mount /dev/${MD_NUM} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
 
+MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
+mdadm --detail /dev/${MD_NUM} | grep Devices > ${MD_LOG1}
+
 echo "Write test file 1 ..."
 dd if=/dev/zero of=/mnt/testfile1 bs=4096 count=1024
-
+MD_LOG2="/tmp/monitor_${MD_NAME}_step2.log"
+ls -l /mnt | tee ${MD_LOG2}
 old_status=$(md_monitor -c "MonitorStatus:/dev/${MD_NUM}")
 echo "Monitor status: $old_status"
 
@@ -78,7 +82,21 @@ if [ $wait_time -ge $MD_TIMEOUT ] ; then
 fi
 echo "Monitor status: $new_status"
 mdadm --detail /dev/${MD_NUM}
-ls -l /mnt
+MD_LOG3="/tmp/monitor_${MD_NAME}_step3.log"
+ls -l /mnt | tee ${MD_LOG3}
+
+if ! diff ${MD_LOG2} ${MD_LOG3} ; then
+    error_exit "Filesystem contents differ"
+fi
+
+MD_LOG4="/tmp/monitor_${MD_NAME}_step4.log"
+mdadm --detail /dev/${MD_NUM} | grep Devices > ${MD_LOG4}
+if ! diff -u "${MD_LOG1}" "${MD_LOG4}" ; then
+    error_exit "Not all devices on ${MD_NUM} are working"
+fi
+# The array configuration is different from the original one,
+# so we cannot compare the final and the initial state
+unset START_LOG
 
 echo "Umount filesystem ..."
 umount /mnt
