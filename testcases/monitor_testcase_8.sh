@@ -31,6 +31,8 @@ echo "Mount filesystem ..."
 if ! mount /dev/${MD_NUM} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
+MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
+mdadm --detail /dev/md1 | grep Devices > ${MD_LOG1}
 
 echo "Run I/O test"
 run_iotest /mnt
@@ -57,7 +59,7 @@ while [ $sleeptime -lt $SLEEPTIME  ] ; do
     (( sleeptime ++ ))
 done
 if [ $num -gt 0 ] ; then
-    stop_dt
+    stop_iotest
     error_exit "MD monitor did not pick up changes after $sleeptime seconds"
 fi
 
@@ -117,7 +119,15 @@ mdadm --wait /dev/${MD_NUM}
 
 echo "MD status after mdadm --wait:"
 cat /proc/mdstat
-mdadm --detail /dev/${MD_NUM}
+
+MD_LOG2="/tmp/monitor_${MD_NAME}_step2.log"
+mdadm --detail /dev/${MD_NUM} | grep Devices > ${MD_LOG2}
+if ! diff -u "${MD_LOG1}" "${MD_LOG2}" ; then
+    error_exit "Not all devices on ${MD_NUM} are working"
+fi
+# The array configuration is different from the original one,
+# so we cannot compare the final and the initial state
+unset START_LOG
 
 echo "Umount filesystem ..."
 umount /mnt
