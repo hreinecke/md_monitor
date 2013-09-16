@@ -1210,6 +1210,8 @@ void *dasd_monitor_thread (void *ctx)
 				 */
 				if (io_status == IO_TIMEOUT)
 					new_status = TIMEOUT;
+				warn("%s: failing faulty device",
+				     dev->dev_name);
 				/* Fallthrough */
 			case PENDING:
 			case TIMEOUT:
@@ -1491,7 +1493,7 @@ static void fail_mirror(struct device_monitor *dev, enum md_rdev_status status)
 			pthread_cond_signal(&pending_cond);
 			pthread_mutex_unlock(&pending_lock);
 		} else {
-			info("%s: fail scheduled", md_name);
+			info("%s: fail already scheduled", md_name);
 		}
 	}
 
@@ -1511,6 +1513,12 @@ static void reset_mirror(struct device_monitor *dev)
 		warn("%s: No md device found", dev->dev_name);
 		return;
 	}
+	pthread_mutex_lock(&md_dev->lock);
+	if (!md_dev->device) {
+		pthread_mutex_unlock(&md_dev->lock);
+		return;
+	}
+	md_name = udev_device_get_sysname(md_dev->device);
 	if (dev->md_slot == -1) {
 		int nr_devs[2];
 
@@ -1530,16 +1538,13 @@ static void reset_mirror(struct device_monitor *dev)
 		} else {
 			info("%s: device removed, no slot information",
 			     dev->dev_name);
+			pthread_mutex_unlock(&md_dev->lock);
 			return;
 		}
+	} else {
+		side = dev->md_slot % (md_dev->layout & 0xFF);
 	}
-	side = dev->md_slot % (md_dev->layout & 0xFF);
-	pthread_mutex_lock(&md_dev->lock);
-	if (!md_dev->device) {
-		pthread_mutex_unlock(&md_dev->lock);
-		return;
-	}
-	md_name = udev_device_get_sysname(md_dev->device);
+
 	info("%s: reset mirror side %d", md_name, side);
 	ready_devices = 0;
 	list_for_each_entry(tmp, &md_dev->children, siblings) {
@@ -1564,7 +1569,7 @@ static void reset_mirror(struct device_monitor *dev)
 	info("%s: reset mirror, %d of %d devices ready", md_name,
 	     ready_devices, md_dev->raid_disks);
 	if (!list_empty(&md_dev->pending)) {
-		info("%s: reset scheduled", md_name);
+		info("%s: reset already scheduled", md_name);
 		pthread_mutex_unlock(&md_dev->lock);
 		return;
 	}
