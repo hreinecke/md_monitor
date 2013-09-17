@@ -292,21 +292,16 @@ function run_iotest() {
     else
 	run_dd "dt" $MNT $BLKS > /tmp/dt.log 2>&1 &
     fi
+    DT_PID=$!
 }
 
 function stop_iotest() {
     DT_PROG=$(which dt 2> /dev/null);
 
-    if kill -TERM %run_dd 2> /dev/null ; then
-	wait %run_dd 2>/dev/null
-	if [ -z "$DT_PROG" ] ; then
-	    PRG="dd"
-	else
-	    PRG="dt"
-	fi
-	if killall -KILL ${PRG} ; then
-	    wait 2>/dev/null
-	fi
+    if [ -n "${DT_PID}" ] && kill -TERM ${DT_PID} 2> /dev/null ; then
+	echo -n "waiting for ${DT_PROG:-dd} to finish (PID ${DT_PID}) ... "
+	wait ${DT_PID} 2> /dev/null
+	echo done
     fi
 }
 
