@@ -43,7 +43,7 @@ if [ $? != 0 ] ; then
 fi
 
 echo "Waiting for reshape to finish"
-wait_for_sync ${MD_NUM}
+wait_for_sync ${MD_NUM} || error_exit "TEST FAILED, wait_for_sync indicated an error"
 
 # Wait for lazy bitmap update to finish
 sleeptime=0
@@ -82,7 +82,7 @@ if [ $? != 0 ] ; then
     error_exit "Cannot reshape array"
 fi
 
-wait_for_sync ${MD_NUM}
+wait_for_sync ${MD_NUM} || error_exit "TEST FAILED, wait_for_sync indicated an error"
 
 sleep 5
 
