@@ -7,6 +7,7 @@
 
 MD_NUM="md1"
 MD_NAME="testcase11"
+NUM_STEPS=8
 
 logger "Monitor Testcase 11: Multiple Array startup/shutdown"
 
@@ -19,7 +20,10 @@ clear_metadata
 ulimit -c unlimited
 start_md ${MD_NUM} 8
 
-md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
+sleep 1
+echo -n "MonitorStatus on /dev/${MD_NUM}: "
+MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
+md_monitor -c"MonitorStatus:/dev/${MD_NUM}" | tee ${MD_LOG1}
 
 n=4
 devlist=
@@ -39,47 +43,87 @@ if [ $? != 0 ] ; then
 fi
 
 mdadm --wait /dev/${MD2_NAME}
-mdadm --detail /dev/${MD2_NAME}
+MD_LOG2="/tmp/monitor_${MD_NAME}_step2.log"
+mdadm --detail /dev/${MD2_NAME} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG2}
 mdadm --brief --detail /dev/${MD2_NAME} >> /etc/mdadm.conf
 sleep 1
-md_monitor -c"ArrayStatus:/dev/${MD2_NAME}"
-
+echo -n "MonitorStatus on /dev/${MD2_NAME}: "
+MD_LOG3="/tmp/monitor_${MD_NAME}_step3.log"
+md_monitor -c"MonitorStatus:/dev/${MD2_NAME}" | tee ${MD_LOG3}
+MD_MAX=2
 n=7
 devlist=
 while [ $n -lt 9 ] ; do
-    devlist="$devlist ${DEVICES_LEFT[$n]} ${DEVICES_RIGHT[$n]}"
+    if [ "${DEVICES_LEFT[$n]}" ] ; then
+	devlist="$devlist ${DEVICES_LEFT[$n]}"
+    fi
+    if [ "${DEVICES_RIGHT[$n]}" ] ; then
+	devlist="$devlist ${DEVICES_RIGHT[$n]}"
+    fi
     n=$(expr $n + 1)
 done
-
-MD3_NAME="md3"
-echo "Create MD array $MD3_NAME ..."
-mdadm --create /dev/${MD3_NAME} --name=${MD3_NAME} \
-    --raid-devices=4 ${MD_ARGS} --level=raid10 \
-    --failfast ${devlist}
-if [ $? != 0 ] ; then
-    error_exit "Cannot create MD array $MD3_NAME."
+if [ -n "$devlist" ] ; then
+    MD3_NAME="md3"
+    echo "Create MD array $MD3_NAME ..."
+    mdadm --create /dev/${MD3_NAME} --name=${MD3_NAME} \
+	--raid-devices=4 ${MD_ARGS} --level=raid10 \
+	--failfast ${devlist}
+    if [ $? != 0 ] ; then
+	error_exit "Cannot create MD array $MD3_NAME."
+    fi
+    (( MD_MAX++ ))
+    mdadm --wait /dev/${MD3_NAME}
+    MD_LOG4="/tmp/monitor_${MD_NAME}_step4.log"
+    mdadm --detail /dev/${MD3_NAME} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG4}
+    mdadm --brief --detail /dev/${MD3_NAME} >> /etc/mdadm.conf
+    sleep 1
+    echo -n "MonitorStatus on /dev/${MD3_NAME}: "
+    MD_LOG5="/tmp/monitor_${MD_NAME}_step5.log"
+    md_monitor -c"MonitorStatus:/dev/${MD3_NAME}" | tee ${MD_LOG5}
 fi
 
-mdadm --wait /dev/${MD3_NAME}
-mdadm --detail /dev/${MD3_NAME}
-mdadm --brief --detail /dev/${MD3_NAME} >> /etc/mdadm.conf
-sleep 1
-md_monitor -c"ArrayStatus:/dev/${MD3_NAME}"
-
-for MD in md1 md2 md3 md2 md1 md2 md3 md1 md3 ; do
-    echo "Stop MD array $MD ..."
-    mdadm --stop /dev/${MD}
+step=0
+while [ $step -lt $NUM_STEPS ] ; do
+    MD=$(expr $RANDOM % $MD_MAX)
+    (( MD++ ))
+    echo "Stop MD array md$MD ..."
+    mdadm --stop /dev/md${MD}
     sleep 1
-    md_monitor -c"MirrorStatus:/dev/${MD}"
-    md_monitor -c"MonitorStatus:/dev/${MD}"
+    mdadm --detail /dev/md${MD}
+    echo -n "MonitorStatus on /dev/md${MD}: "
+    md_monitor -c"MonitorStatus:/dev/md${MD}"
     sleep $(expr $RANDOM / 1024)
-    echo "Reassemble MD array $MD ..."
-    mdadm --assemble /dev/${MD}
-    mdadm --wait /dev/${MD}
+    echo "Reassemble MD array md$MD ..."
+    mdadm --assemble /dev/md${MD}
+    mdadm --wait /dev/md${MD}
     sleep 1
-    md_monitor -c"MirrorStatus:/dev/${MD}"
-    md_monitor -c"MonitorStatus:/dev/${MD}"
+    MD_LOG6="/tmp/monitor_${MD_NAME}_step6.log"
+    mdadm --detail /dev/md${MD} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG6}
+    if [ ${MD} -eq 1 ] ; then
+	MD_LOGN=${START_LOG}
+    elif [ ${MD} -eq 2 ] ; then
+	MD_LOGN=${MD_LOG2}
+    elif [ ${MD} -eq 3 ] ; then
+	MD_LOGN=${MD_LOG4}
+    fi
+    if ! diff -u "${MD_LOGN}" "${MD_LOG6}" ; then
+	error_exit "Not all devices on md${MD} are working"
+    fi
+    if [ ${MD} -eq 1 ] ; then
+	MD_LOGN=${MD_LOG1}
+    elif [ ${MD} -eq 2 ] ; then
+	MD_LOGN=${MD_LOG3}
+    elif [ ${MD} -eq 3 ] ; then
+	MD_LOGN=${MD_LOG5}
+    fi
+    echo -n "MonitorStatus on /dev/md${MD}: "
+    MD_LOG7="/tmp/monitor_${MD_NAME}_step7.log"
+    md_monitor -c"MonitorStatus:/dev/md${MD}" | tee ${MD_LOG7}
+    if ! diff -u "${MD_LOGN}" "${MD_LOG7}" ; then
+	error_exit "Monitor information on md${MD} is inconsistent"
+    fi
     sleep $(expr $RANDOM / 1024)
+    (( step++ ))
 done
 
 mdadm --stop /dev/${MD2_NAME}
