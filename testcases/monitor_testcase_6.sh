@@ -8,6 +8,7 @@
 MD_NUM="md1"
 MD_NAME="testcase6"
 IO_TIMEOUT=10
+MONITOR_TIMEOUT=60
 
 logger "Monitor Testcase 6: Reserve DASDs w/ I/O"
 
@@ -69,11 +70,16 @@ while [ $num -gt 0  ] ; do
 	fi
     done
     [ $num -eq 0 ] && break
+    [ $sleeptime -gt $MONITOR_TIMEOUT ] && break
     num=${#DASDS_LEFT[@]}
     sleep 1
     (( sleeptime ++ ))
 done
-echo "$(date) MD monitor picked up changes after $sleeptime seconds"
+if [ $num -eq 0 ] ; then
+    echo "$(date) MD monitor picked up changes after $sleeptime seconds"
+else
+    error_exit "$(date) MD monitor did not pick up changes after $sleeptime seconds"
+fi
 
 echo "$(date) MD status"
 mdadm --detail /dev/${MD_NUM}
@@ -118,7 +124,7 @@ while [ $num -gt 0  ] ; do
 	fi
     done
     [ $num -eq 0 ] && break
-    [ $sleeptime -gt 60 ] && break
+    [ $sleeptime -gt t $MONITOR_TIMEOUT ] && break
     num=${#DASDS_LEFT[@]}
     sleep 1
     (( sleeptime ++ ))
