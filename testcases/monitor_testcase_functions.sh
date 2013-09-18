@@ -79,11 +79,15 @@ function start_md() {
     if [ -n "$MDADM_PID" ] ; then
 	trapcmd="$trapcmd ; kill -TERM $MDADM_PID"
     fi
+    iostat -kt 1 > /tmp/monitor_${MD_NAME}_iostat.log 2>&1 &
+    IOSTAT_PID=$!
+    if [ -n "$IOSTAT_PID" ] ; then
+	trapcmd="$trapcmd ; kill -TERM $IOSTAT_PID"
+    fi
     if [ -n "$trapcmd" ] ; then
 	trap "$trapcmd" EXIT
 	MDADM_PID=
     fi
-    iostat -kt 1 > /tmp/monitor_${MD_NAME}_iostat.log 2>&1 &
 }
 
 function stop_md() {
