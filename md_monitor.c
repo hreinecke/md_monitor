@@ -1186,6 +1186,7 @@ void *dasd_monitor_thread (void *ctx)
 				fail_mirror(dev, new_status);
 			}
 			aio_timeout = monitor_timeout;
+			dev->io_status = io_status;
 			pthread_mutex_lock(&dev->lock);
 			continue;
 		}
