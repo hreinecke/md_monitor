@@ -6,7 +6,7 @@
 . ./monitor_testcase_functions.sh
 
 MD_NUM="md1"
-MD_NAME="testcase5"
+MD_NAME="testcase12"
 MONITOR_TIMEOUT=60
 SLEEPTIME=30
 
@@ -23,7 +23,7 @@ modprobe vmcp
 ulimit -c unlimited
 start_md ${MD_NUM}
 
-echo "Create filesystem ..."
+echo "$(date) Create filesystem ..."
 if ! mkfs.ext3 /dev/${MD_NUM} ; then
     error_exit "Cannot create fs"
 fi
@@ -37,17 +37,17 @@ echo "$(date) Run I/O test"
 run_iotest /mnt;
 
 for devno in ${DEVNOS_LEFT} ; do
-    echo "Waiting for $SLEEPTIME seconds ..."
+    echo "$(date) Waiting for $SLEEPTIME seconds ..."
     sleep $SLEEPTIME
 
-    echo "Detach left device $devno ..."
+    echo "$(date) Detach left device $devno ..."
     vmcp det ${devno##*.}
-    echo "Waiting for 15 seconds ..."
+    echo "$(date) Waiting for 15 seconds ..."
     sleep 15
-    cat /proc/mdstat
-    echo "Attach left device $devno ..."
+    md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
+    echo "$(date) Attach left device $devno ..."
     vmcp link \* ${devno##*.} ${devno##*.}
-    cat /proc/mdstat
+    md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
 done
 
 echo "$(date) Ok. Waiting for MD to pick up changes ..."
@@ -70,28 +70,32 @@ done
 if [ $sleeptime -lt $MONITOR_TIMEOUT ] ; then
     echo "$(date) MD monitor picked up changes after $sleeptime seconds"
 else
-    echo "$(date) ERROR: $num devices are still faulty"
+    echo "$(date) MD array still faulty"
+    md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
+    stop_iotest
+    error_exit "$num devices are still faulty"
 fi
 
 echo "$(date) Wait for sync"
 if ! wait_for_sync ${MD_NUM} ; then
-    echo "$(date) mirror not synchronized"
-    cat /proc/mdstat
+    md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
+    stop_iotest
+    error_exit "mirror not synchronized"
 else
     echo "$(date) mirror synchronized"
-    cat /proc/mdstat
+    md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
     for devno in ${DEVNOS_RIGHT} ; do
-	echo "Waiting for $SLEEPTIME seconds ..."
+	echo "$(date) Waiting for $SLEEPTIME seconds ..."
 	sleep $SLEEPTIME
 
-	echo "Detach right device $devno ..."
+	echo "$(date) Detach right device $devno ..."
 	vmcp det ${devno##*.}
-	echo "Waiting for 15 seconds ..."
+	echo "$(date) Waiting for 15 seconds ..."
 	sleep 15
-	cat /proc/mdstat
-	echo "Attach right device $devno ..."
+	md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
+	echo "$(date) Attach right device $devno ..."
 	vmcp link \* ${devno##*.} ${devno##*.}
-	cat /proc/mdstat
+	md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
     done
 
     echo "$(date) Ok. Waiting for MD to pick up changes ..."
@@ -119,7 +123,7 @@ else
     echo "$(date) Wait for sync"
     wait_for_sync ${MD_NUM}
     echo "$(date) sync finished"
-    cat /proc/mdstat
+    md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
 fi
 
 echo "$(date) Stop I/O test"
@@ -127,7 +131,7 @@ stop_iotest
 
 wait_for_sync ${MD_NUM}
 
-echo "Umount filesystem ..."
+echo "$(date) Umount filesystem ..."
 umount /mnt
 
 stop_md ${MD_NUM}
