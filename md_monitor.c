@@ -758,7 +758,8 @@ enum md_rdev_status md_rdev_update_state(struct device_monitor *dev,
 {
 	enum md_rdev_status old_status = dev->md_status;
 
-	if (dev->md_status == PENDING) {
+	switch (old_status) {
+	case PENDING:
 		/*
 		 * PENDING indicates we've sent a 'fail' request
 		 * to mdadm for a device which was 'in_sync'. So
@@ -774,7 +775,8 @@ enum md_rdev_status md_rdev_update_state(struct device_monitor *dev,
 			     dev->dev_name, md_rdev_print_state(md_status));
 			md_status = dev->md_status;
 		}
-	} else if (dev->md_status == RECOVERY) {
+		break;
+	case RECOVERY:
 		/*
 		 * RECOVERY indicates we've send a 'remove' and
 		 * 're-add' sequence to mdadm for a failed device.
@@ -785,8 +787,10 @@ enum md_rdev_status md_rdev_update_state(struct device_monitor *dev,
 		} else {
 			md_status = dev->md_status;
 		}
-	} else {
+		break;
+	default:
 		dev->md_status = md_status;
+		break;
 	}
 	if (old_status != dev->md_status)
 		info("%s: md state update from %s to %s", dev->dev_name,
