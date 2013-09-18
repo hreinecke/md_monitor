@@ -37,10 +37,8 @@ MD_ARGS="--bitmap=internal --chunk=1024 --bitmap-chunk=512K --assume-clean --for
 echo "Create MD array $MD2_NAME ..."
 mdadm --create /dev/${MD2_NAME} --name=${MD2_NAME} \
     --raid-devices=6 ${MD_ARGS} --level=raid10 \
-    --failfast ${devlist}
-if [ $? != 0 ] ; then
-    error_exit "Cannot create MD array $MD2_NAME."
-fi
+    --failfast ${devlist} \
+    || error_exit "Cannot create MD array $MD2_NAME."
 
 mdadm --wait /dev/${MD2_NAME}
 MD_LOG2="/tmp/monitor_${MD_NAME}_step2.log"
@@ -67,10 +65,8 @@ if [ -n "$devlist" ] ; then
     echo "Create MD array $MD3_NAME ..."
     mdadm --create /dev/${MD3_NAME} --name=${MD3_NAME} \
 	--raid-devices=4 ${MD_ARGS} --level=raid10 \
-	--failfast ${devlist}
-    if [ $? != 0 ] ; then
-	error_exit "Cannot create MD array $MD3_NAME."
-    fi
+	--failfast ${devlist} \
+	|| error_exit "Cannot create MD array $MD3_NAME."
     (( MD_MAX++ ))
     mdadm --wait /dev/${MD3_NAME}
     MD_LOG4="/tmp/monitor_${MD_NAME}_step4.log"
@@ -94,7 +90,8 @@ while [ $step -lt $NUM_STEPS ] ; do
     md_monitor -c"MonitorStatus:/dev/md${MD}"
     sleep $(expr $RANDOM / 1024)
     echo "Reassemble MD array md$MD ..."
-    mdadm --assemble /dev/md${MD}
+    mdadm --assemble /dev/md${MD} \
+	|| error_exit "Cannot assemble MD array md${MD}"
     mdadm --wait /dev/md${MD}
     sleep 1
     MD_LOG6="/tmp/monitor_${MD_NAME}_step6.log"
