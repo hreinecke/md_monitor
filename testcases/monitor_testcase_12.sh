@@ -36,6 +36,9 @@ fi
 echo "$(date) Run I/O test"
 run_iotest /mnt;
 
+MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
+md_monitor -c"ArrayStatus:/dev/${MD_NUM}" > ${MD_LOG1}
+
 for devno in ${DEVNOS_LEFT} ; do
     echo "$(date) Waiting for $SLEEPTIME seconds ..."
     sleep $SLEEPTIME
@@ -50,86 +53,49 @@ for devno in ${DEVNOS_LEFT} ; do
     md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
 done
 
-echo "$(date) Ok. Waiting for MD to pick up changes ..."
-# Wait for md_monitor to pick up changes
-sleeptime=0
-num=${#DASDS_LEFT[@]}
-while [ $num -gt 0  ] ; do
-    [ $sleeptime -ge $MONITOR_TIMEOUT ] && break
-    for d in ${DASDS_LEFT[@]} ; do
-	device=$(sed -n "s/${MD_NUM}.* \(${d}1\[[0-9]\]\).*/\1/p" /proc/mdstat)
-	if [ "$device" ] ; then
-	    (( num -- ))
-	fi
-    done
-    [ $num -eq 0 ] && break
-    num=${#DASDS_LEFT[@]}
-    sleep 1
-    (( sleeptime ++ ))
-done
-if [ $sleeptime -lt $MONITOR_TIMEOUT ] ; then
-    echo "$(date) MD monitor picked up changes after $sleeptime seconds"
-else
-    echo "$(date) MD array still faulty"
-    md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
-    stop_iotest
-    error_exit "$num devices are still faulty"
-fi
-
 echo "$(date) Wait for sync"
 if ! wait_for_sync ${MD_NUM} ; then
     md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
     stop_iotest
     error_exit "mirror not synchronized"
-else
-    echo "$(date) mirror synchronized"
-    md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
-    for devno in ${DEVNOS_RIGHT} ; do
-	echo "$(date) Waiting for $SLEEPTIME seconds ..."
-	sleep $SLEEPTIME
+fi
+echo "$(date) mirror synchronized"
+MD_LOG2="/tmp/monitor_${MD_NAME}_step2.log"
+md_monitor -c"ArrayStatus:/dev/${MD_NUM}" > ${MD_LOG2}
+if ! diff -pu ${MD_LOG1} ${MD_LOG2} ; then
+    stop_iotest
+    error_exit "MD monitor reported array failure"
+fi
 
-	echo "$(date) Detach right device $devno ..."
-	vmcp det ${devno##*.}
-	echo "$(date) Waiting for 15 seconds ..."
-	sleep 15
-	md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
-	echo "$(date) Attach right device $devno ..."
-	vmcp link \* ${devno##*.} ${devno##*.}
-	md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
-    done
-
-    echo "$(date) Ok. Waiting for MD to pick up changes ..."
-    # Wait for md_monitor to pick up changes
-    sleeptime=0
-    num=${#DASDS_RIGHT[@]}
-    while [ $num -gt 0  ] ; do
-	[ $sleeptime -ge $MONITOR_TIMEOUT ] && break
-	for d in ${DASDS_RIGHT[@]} ; do
-	    device=$(sed -n "s/${MD_NUM}.* \(${d}1\[[0-9]\]\).*/\1/p" /proc/mdstat)
-	    if [ "$device" ] ; then
-		(( num -- ))
-	    fi
-	done
-	[ $num -eq 0 ] && break
-	num=${#DASDS_RIGHT[@]}
-	sleep 1
-	(( sleeptime ++ ))
-    done
-    if [ $sleeptime -lt $MONITOR_TIMEOUT ] ; then
-	echo "$(date) MD monitor picked up changes after $sleeptime seconds"
-    else
-	echo "$(date) ERROR: $num devices are still faulty"
-    fi
-    echo "$(date) Wait for sync"
-    wait_for_sync ${MD_NUM}
-    echo "$(date) sync finished"
+for devno in ${DEVNOS_RIGHT} ; do
+    echo "$(date) Waiting for $SLEEPTIME seconds ..."
+    sleep $SLEEPTIME
+    
+    echo "$(date) Detach right device $devno ..."
+    vmcp det ${devno##*.}
+    echo "$(date) Waiting for 15 seconds ..."
+    sleep 15
     md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
+    echo "$(date) Attach right device $devno ..."
+    vmcp link \* ${devno##*.} ${devno##*.}
+    md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
+done
+
+echo "$(date) Wait for sync"
+if ! wait_for_sync ${MD_NUM} ; then
+    stop_iotest
+    error_exit "mirror not synchronized"
+fi
+echo "$(date) sync finished"
+MD_LOG3="/tmp/monitor_${MD_NAME}_step3.log"
+md_monitor -c"ArrayStatus:/dev/${MD_NUM}" > ${MD_LOG3}
+if ! diff -pu ${MD_LOG1} ${MD_LOG3} ; then
+    stop_iotest
+    error_exit "MD monitor reported array failure"
 fi
 
 echo "$(date) Stop I/O test"
 stop_iotest
-
-wait_for_sync ${MD_NUM}
 
 echo "$(date) Umount filesystem ..."
 umount /mnt
