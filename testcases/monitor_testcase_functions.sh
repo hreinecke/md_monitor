@@ -21,10 +21,7 @@ function devno_from_dasd() {
 function error_exit() {
     local errstr=$1
 
-    echo $errstr
-    if [ "$MDADM_PID" ] ; then
-	kill -TERM $MDADM_PID
-    fi
+    echo "$(date) $errstr"
     exit 1
 }
 
