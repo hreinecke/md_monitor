@@ -1581,7 +1581,7 @@ static void reset_mirror(struct device_monitor *dev)
 static void fail_md_component(struct md_monitor *md_dev,
 			      struct device_monitor *dev)
 {
-	enum md_rdev_status md_status;
+	enum md_rdev_status md_status, new_status;
 
 	/*
 	 * Fail does not necessarily indicate the device has gone,
@@ -1590,24 +1590,22 @@ static void fail_md_component(struct md_monitor *md_dev,
 	info("%s: notify for device state change", dev->dev_name);
 
 	md_status = md_rdev_check_state(dev);
-	if (md_status == UNKNOWN ||
-	    md_status == REMOVED ||
-	    md_status == SPARE) {
+	if (md_status == UNKNOWN) {
 		warn("%s: device status %s", dev->dev_name,
 		     md_rdev_print_state(md_status));
 		return;
 	}
 	pthread_mutex_lock(&dev->lock);
-	dev->md_status = md_status;
-	if (md_status == TIMEOUT)
+	new_status = md_rdev_update_state(dev, FAULTY);
+	if (new_status == TIMEOUT)
 		dev->io_status = IO_TIMEOUT;
-	else if (md_status == FAULTY)
+	else if (new_status == FAULTY)
 		dev->io_status = IO_FAILED;
 	else
 		dev->io_status = IO_OK;
 	pthread_mutex_unlock(&dev->lock);
-	if (md_status != IN_SYNC)
-		fail_mirror(dev, md_status);
+	if (new_status != IN_SYNC)
+		fail_mirror(dev, new_status);
 
 	monitor_dasd(dev);
 }
