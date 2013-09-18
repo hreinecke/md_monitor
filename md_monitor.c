@@ -2462,8 +2462,8 @@ void *cli_monitor_thread(void *ctx)
 		if (!strcmp(event, "RebuildStarted")) {
 			info("%s: Rebuild started",
 			     udev_device_get_sysname(md_dev->device));
-			discover_md_components(md_dev);
 			md_dev->in_recovery = 1;
+			discover_md_components(md_dev);
 			buf[0] = 0;
 			iov.iov_len = 0;
 			goto send_msg;
