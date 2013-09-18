@@ -3,7 +3,7 @@
 # Testcase 6: reserve DASDs w/ I/O
 #
 
-. ./monitor_testcase_functions.sh
+. $(dirname "$0")/monitor_testcase_functions.sh
 
 MD_NUM="md1"
 MD_NAME="testcase6"
