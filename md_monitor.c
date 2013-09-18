@@ -1522,22 +1522,15 @@ static void reset_mirror(struct device_monitor *dev)
 		return;
 	}
 	md_name = udev_device_get_sysname(md_dev->device);
-	if (dev->md_slot == -1) {
-		int nr_devs[2];
+	if (md_dev->in_recovery) {
+		pthread_mutex_unlock(&md_dev->lock);
+		info("%s: array in recovery, skip reset", md_name);
+		return;
+	}
 
-		memset(nr_devs, 0, sizeof(int) * 2);
-		list_for_each_entry(tmp, &md_dev->children, siblings) {
-			int this_side;
-
-			if (tmp->md_slot < 0)
-				continue;
-			this_side = tmp->md_slot % (md_dev->layout & 0xFF);
-			nr_devs[this_side]++;
-		}
-		if (nr_devs[0] == 0) {
-			side = 0;
-		} else if (nr_devs[1] == 0) {
-			side = 1;
+	if (dev->md_slot < 0) {
+		if (md_dev->degraded && md_dev->degraded < 3) {
+			side = md_dev->degraded >> 1;
 		} else {
 			info("%s: device removed, no slot information",
 			     dev->dev_name);
