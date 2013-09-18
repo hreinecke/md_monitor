@@ -1363,21 +1363,23 @@ static int fail_component(struct md_monitor *md_dev,
 	pthread_t thread;
 
 	/* Check state if we need to do anything here */
-	md_status = md_rdev_check_state(dev);
+	dev->md_status = md_rdev_check_state(dev);
+	pthread_mutex_lock(&dev->lock);
+	md_status = md_rdev_update_state(dev, new_status);
 	if (md_status == new_status) {
+		pthread_mutex_unlock(&dev->lock);
 		info("%s: already in state '%s'",
 		     dev->dev_name, md_rdev_print_state(md_status));
 		return rc;
 	}
 
-	pthread_mutex_lock(&dev->lock);
 	thread = dev->thread;
 	if (dev->running && thread) {
 		if (new_status == REMOVED)
 			dev->running = 0;
 		pthread_mutex_unlock(&dev->lock);
-		info("%s: notify monitor thread",
-		     dev->dev_name);
+		info("%s: notify monitor thread for new status %s",
+		     dev->dev_name, md_rdev_print_state(new_status));
 		pthread_kill(thread, SIGHUP);
 		rc = EBUSY;
 	} else {
