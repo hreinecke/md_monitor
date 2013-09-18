@@ -31,16 +31,13 @@ if ! mount /dev/${MD_NUM} /mnt ; then
 fi
 
 echo "Add ${DEVICES_LEFT[3]} ${DEVICES_RIGHT[3]}"
-mdadm --add /dev/${MD_NUM} --failfast ${DEVICES_LEFT[3]} ${DEVICES_RIGHT[3]}
-if [ $? != 0 ] ; then
-    error_exit "Cannot add devices"
-fi
+mdadm --add /dev/${MD_NUM} \
+    --failfast ${DEVICES_LEFT[3]} ${DEVICES_RIGHT[3]} \
+    || error_exit "Cannot add devices"
 
 echo "Expand array"
-mdadm --grow /dev/${MD_NUM} --raid-devices=8
-if [ $? != 0 ] ; then
-    error_exit "Cannot expand array"
-fi
+mdadm --grow /dev/${MD_NUM} --raid-devices=8 \
+    || error_exit "Cannot expand array"
 
 echo "Waiting for reshape to finish"
 wait_for_sync ${MD_NUM} || error_exit "TEST FAILED, wait_for_sync indicated an error"
@@ -57,14 +54,12 @@ if [ $sleeptime -ge $RESHAPE_TIMEOUT ] ; then
     error_exit "Bitmap not cleared after $sleeptime seconds"
 fi
 
-mdadm --grow /dev/${MD_NUM} --bitmap=none
-if [ $? != 0 ] ; then
-    error_exit "Cannot remove bitmap"
-fi
-mdadm --grow /dev/${MD_NUM} --bitmap=internal --bitmap-chunk=512K
-if [ $? != 0 ] ; then
-    error_exit "Cannot update bitmap size"
-fi
+mdadm --grow /dev/${MD_NUM} --bitmap=none \
+    || error_exit "Cannot remove bitmap"
+
+mdadm --grow /dev/${MD_NUM} --bitmap=internal --bitmap-chunk=512K \
+    || error_exit "Cannot update bitmap size"
+
 cat /proc/mdstat
 sleep 5
 
@@ -72,27 +67,22 @@ echo "Resize array"
 raid_size=$(sed -n 's/ *\([0-9]*\) blocks .*/\1/p' /proc/mdstat)
 raid_size=$(( raid_size / 8 ))
 raid_size=$(( raid_size * 6 ))
-mdadm --grow /dev/${MD_NUM} --array-size=$raid_size
-if [ $? != 0 ] ; then
-    error_exit "Cannot resize array"
-fi
+mdadm --grow /dev/${MD_NUM} --array-size=$raid_size \
+    || error_exit "Cannot resize array"
 
-mdadm --grow /dev/${MD_NUM} --raid-devices=6
-if [ $? != 0 ] ; then
-    error_exit "Cannot reshape array"
-fi
+mdadm --grow /dev/${MD_NUM} --raid-devices=6 \
+    || error_exit "Cannot reshape array"
 
-wait_for_sync ${MD_NUM} || error_exit "TEST FAILED, wait_for_sync indicated an error"
+wait_for_sync ${MD_NUM} \
+    || error_exit "TEST FAILED, wait_for_sync indicated an error"
 
 sleep 5
 
 # Bug#763212
 echo "Removing spare devices"
 for dev in $(mdadm --detail /dev/${MD_NUM} | sed -n 's/.*spare *\(\/dev\/dasd[a-z]*[0-9]*\)/\1/p') ; do
-    mdadm --manage /dev/${MD_NUM} --remove ${dev}
-    if [ $? != 0 ] ; then
-	error_exit "Cannot remove spare device ${dev}"
-    fi
+    mdadm --manage /dev/${MD_NUM} --remove ${dev} \
+	|| error_exit "Cannot remove spare device ${dev}"
 done
 
 mdadm --detail /dev/${MD_NUM}
