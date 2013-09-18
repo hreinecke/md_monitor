@@ -60,7 +60,7 @@ function start_md() {
 	--failfast ${devlist} \
 	|| error_exit "Cannot create MD array."
 
-    mdadm --wait ${MD_DEVNAME}
+    mdadm --wait ${MD_DEVNAME} || true
     START_LOG="/tmp/monitor_${MD_NAME}_mdstat_start.log"
     mdadm --detail ${MD_DEVNAME} | sed '/Update Time/D;/Events/D' | tee ${START_LOG}
     echo "POLICY action=re-add" > /etc/mdadm.conf
@@ -193,7 +193,7 @@ function activate_dasds() {
 	    fi
 	fi
 	DEVICES_LEFT+=("/dev/${dasd}1")
-	(( devno_start++))
+	(( devno_start++)) || true
     done
 
     devno_start=$((DEVNO_RIGHT_START))
@@ -236,7 +236,7 @@ function activate_dasds() {
 	    fi
 	fi
 	DEVICES_RIGHT+=("/dev/${dasd}1")
-	(( devno_start++))
+	(( devno_start++)) || true
     done
 }
 
@@ -260,7 +260,7 @@ function run_dd() {
 
     if [ "$PRG" = "dt" ] ; then
 	CPUS=$(sed -n 's/^# processors *: \([0-9]*\)/\1/p' /proc/cpuinfo)
-	(( CPUS * 2 ))
+	(( CPUS * 2 )) || true
 	SIZE=$(( $BLKS * 4096 ))
 	${DT_PROG} of=${MNT}/dt.scratch bs=4k incr=var min=4k max=256k errors=1 procs=$CPUS oncerr=abort disable=pstats disable=fsync oflags=trunc errors=1 dispose=keep pattern=iot iotype=random runtime=24h limit=${SIZE} log=/tmp/dt.log > /dev/null 2>&1
     else
@@ -298,7 +298,7 @@ function stop_iotest() {
 
     if [ -n "${DT_PID}" ] && kill -TERM ${DT_PID} 2> /dev/null ; then
 	echo -n "waiting for ${DT_PROG:-dd} to finish (PID ${DT_PID}) ... "
-	wait ${DT_PID} 2> /dev/null
+	wait ${DT_PID} 2> /dev/null || true
 	echo done
     fi
 }
@@ -376,13 +376,13 @@ function wait_for_sync () {
       # Stop loop if all devices are working
       [ $working_disks -eq $raid_disks ] && break
       sleep 1
-      (( wait_time++ ))
+      (( wait_time++ )) || true
   done
   if [ $wait_time -ge $MONITORTIMEOUT ] ; then
       echo "ERROR: recovery didn't start after $MONITORTIMEOUT seconds"
       return 1
   fi
-  mdadm --wait /dev/$MD
+  mdadm --wait /dev/$MD || true
 
   if [ "$action" != "reshape" ] ; then
       # Reset sync speed
@@ -408,7 +408,7 @@ function wait_for_sync () {
 	  num_pages=$(sed -n 's/ *bitmap: \([0-9]*\)\/[0-9]* .*/\1/p' /proc/mdstat)
 	  [ $num_pages -eq 0 ] && break
 	  sleep 1
-	  (( wait_time++ ))
+	  (( wait_time++ )) || true
       done
       if [ $wait_time -ge $MONITORTIMEOUT ] ; then
 	  echo "bitmap didn't clear after $MONITORTIMEOUT seconds:"
@@ -416,6 +416,6 @@ function wait_for_sync () {
       fi
   fi
 
-  let ELAPSED_TIME=`date +%s`-$START_TIME;
+  let ELAPSED_TIME=`date +%s`-$START_TIME || true
   echo "sync finished after $ELAPSED_TIME secs";
 }
