@@ -60,10 +60,8 @@ function start_md() {
     echo "Create MD array ..."
     mdadm --create ${MD_DEVNAME} --name=${MD_NAME} \
 	--raid-devices=${MD_DEVICES} ${MD_ARGS} --level=raid10 \
-	--failfast ${devlist}
-    if [ $? != 0 ] ; then
-	error_exit "Cannot create MD array."
-    fi
+	--failfast ${devlist} \
+	|| error_exit "Cannot create MD array."
 
     mdadm --wait ${MD_DEVNAME}
     START_LOG="/tmp/monitor_${MD_NAME}_mdstat_start.log"
@@ -112,8 +110,7 @@ function stop_md() {
 	if [ "$md" = "$cur_md" ] ; then
 	    if grep -q /dev/$md /proc/mounts ; then
 		echo "Unmounting filesystems ..."
-		umount /dev/$md
-		if [ $? -ne 0 ] ; then
+		if ! umount /dev/$md ; then
 		    echo "Cannot unmount /dev/$md"
 		    exit 1
 		fi
