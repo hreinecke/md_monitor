@@ -1197,7 +1197,7 @@ void *dasd_monitor_thread (void *ctx)
 			case RECOVERY:
 				warn("%s: failing device in recovery",
 				     dev->dev_name);
-				fail_mirror(dev, new_status);
+				fail_mirror(dev, FAULTY);
 				break;
 			case IN_SYNC:
 				warn("%s: failing device in_sync",
