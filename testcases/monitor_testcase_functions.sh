@@ -296,7 +296,6 @@ function run_iotest() {
     else
 	run_dd "dt" $MNT $BLKS > /tmp/dt.log 2>&1 &
     fi
-    DT_PID=$!
 }
 
 function stop_iotest() {
