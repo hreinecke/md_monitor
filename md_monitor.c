@@ -274,8 +274,7 @@ const char dasd_io_print_state_short(enum dasd_io_status state)
 static void add_component(struct md_monitor *, struct device_monitor *,
 			  const char *);
 static void remove_component(struct device_monitor *);
-static int fail_component(struct md_monitor *, struct device_monitor *,
-			  enum md_rdev_status);
+static int fail_component(struct device_monitor *, enum md_rdev_status);
 static int reset_component(struct device_monitor *);
 static void fail_mirror(struct device_monitor *, enum md_rdev_status);
 static void reset_mirror(struct device_monitor *);
@@ -1367,8 +1366,7 @@ static void remove_component(struct device_monitor *dev)
 	pthread_mutex_unlock(&dev->lock);
 }
 
-static int fail_component(struct md_monitor *md_dev,
-			  struct device_monitor *dev,
+static int fail_component(struct device_monitor *dev,
 			  enum md_rdev_status new_status)
 {
 	enum md_rdev_status md_status;
@@ -1453,7 +1451,7 @@ static void fail_mirror(struct device_monitor *dev, enum md_rdev_status status)
 		return;
 	}
 	if (!fail_mirror_side || status == REMOVED) {
-		fail_component(md_dev, dev, status);
+		fail_component(dev, status);
 		return;
 	}
 
@@ -1847,8 +1845,7 @@ static void fail_md(struct md_monitor *md_dev)
 		list_for_each_entry(dev, &md_dev->children, siblings) {
 			int this_side = dev->md_slot % (md_dev->layout & 0xFF);
 			if (this_side == (md_dev->pending_side >> 1)) {
-				fail_component(md_dev, dev,
-					       md_dev->pending_status);
+				fail_component(dev, md_dev->pending_status);
 			}
 		}
 		md_dev->degraded |= md_dev->pending_side;
