@@ -66,7 +66,9 @@ else
 fi
 
 echo "$(date) Stop md_monitor"
-md_monitor -c"Shutdown"
+if ! md_monitor -c"Shutdown" ; then
+    error_exit "Failed to stop md_monitor"
+fi
 
 echo "$(date) Wait for 10 seconds"
 sleep 10
@@ -115,7 +117,9 @@ echo "$(date) Stop I/O test"
 stop_iotest
 
 echo "$(date) Wait for sync"
-wait_for_sync ${MD_NUM}
+if ! wait_for_sync ${MD_NUM} ; then
+    error_exit "Mirror not synchronized"
+fi
 
 mdadm --detail /dev/${MD_NUM}
 
@@ -184,6 +188,8 @@ if [ "$detach_other_half" ] ; then
     wait_for_sync ${MD_NUM}
     mdadm --detail /dev/${MD_NUM}
 fi
+
+trap - EXIT
 
 echo "$(date) Umount filesystem ..."
 umount /mnt
