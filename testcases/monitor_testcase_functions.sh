@@ -302,9 +302,10 @@ function run_iotest() {
 function stop_iotest() {
     DT_PROG=$(which dt 2> /dev/null);
 
-    if [ -n "${DT_PID}" ] && kill -TERM ${DT_PID} 2> /dev/null ; then
-	echo -n "waiting for ${DT_PROG:-dd} to finish (PID ${DT_PID}) ... "
-	wait ${DT_PID} 2> /dev/null || true
+    jobs -r
+    if kill -TERM %run_dd 2> /dev/null ; then
+	echo -n "waiting for ${DT_PROG:-dd} to finish ... "
+	wait %run_dd 2> /dev/null || true
 	echo done
     fi
 }
