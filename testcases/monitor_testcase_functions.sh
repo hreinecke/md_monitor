@@ -124,6 +124,12 @@ function stop_md() {
     rm -f /etc/mdadm.conf
 }
 
+function wait_md() {
+    local MD_NUM=$1
+
+    mdadm --wait /dev/${MD_NUM} || true
+}
+
 function activate_dasds() {
     local devno_max=$1
     local devno;
@@ -382,7 +388,7 @@ function wait_for_sync () {
       echo "ERROR: recovery didn't start after $MONITORTIMEOUT seconds"
       return 1
   fi
-  mdadm --wait /dev/$MD || true
+  wait_md ${MD}
 
   if [ "$action" != "reshape" ] ; then
       # Reset sync speed

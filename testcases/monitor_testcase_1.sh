@@ -49,7 +49,7 @@ else
 fi
 echo "Reassemble MD array ..."
 mdadm --assemble /dev/${MD_NUM}
-mdadm --wait /dev/${MD_NUM} || true
+wait_md ${MD_NUM}
 # md_monitor needs some time to pick up array data
 sleep 1
 MD_LOG3="/tmp/monitor_${MD_NAME}_step3.log"

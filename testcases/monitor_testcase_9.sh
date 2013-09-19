@@ -52,7 +52,7 @@ for d in ${DEVICES_LEFT[0]} ; do
 done
 md_status=$(md_monitor -c "MonitorStatus:/dev/${MD_NUM}")
 echo "Monitor status: $md_status"
-mdadm --wait /dev/${MD_NUM}
+wait_md ${MD_NUM}
 echo "Add new device on left side"
 for d in ${DEVICES_LEFT[3]} ; do
     if ! dasdfmt -p -y -b 4096 -f ${d%1} ; then
@@ -68,7 +68,7 @@ for d in ${DEVICES_LEFT[3]} ; do
     fi
 done
 mdadm --detail /dev/${MD_NUM}
-mdadm --wait /dev/${MD_NUM}
+wait_md ${MD_NUM}
 MD_TIMEOUT=15
 wait_time=0
 while [ $wait_time -lt $MD_TIMEOUT ] ; do

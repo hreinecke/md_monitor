@@ -86,7 +86,7 @@ for d in ${DEVICES_LEFT[0]} ; do
     fi
     md_status=$(md_monitor -c "MonitorStatus:/dev/${MD_NUM}")
     echo "Monitor status: $md_status"
-    mdadm --wait /dev/${MD_NUM}
+    wait_md ${MD_NUM}
 
     if ! dasdfmt -p -y -b 4096 -f ${d%1} ; then
 	error_exit "Cannot format device ${d%1}"
@@ -114,8 +114,7 @@ if [ $wait_time -ge $MD_TIMEOUT ] ; then
 fi
 echo "Monitor status: $new_status"
 
-echo "Wait for sync"
-mdadm --wait /dev/${MD_NUM}
+wait_md ${MD_NUM}
 
 echo "MD status after mdadm --wait:"
 cat /proc/mdstat

@@ -40,7 +40,7 @@ mdadm --create /dev/${MD2_NAME} --name=${MD2_NAME} \
     --failfast ${devlist} \
     || error_exit "Cannot create MD array $MD2_NAME."
 
-mdadm --wait /dev/${MD2_NAME}
+wait_md ${MD2_NAME}
 MD_LOG2="/tmp/monitor_${MD_NAME}_step2.log"
 mdadm --detail /dev/${MD2_NAME} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG2}
 mdadm --brief --detail /dev/${MD2_NAME} >> /etc/mdadm.conf
@@ -68,7 +68,7 @@ if [ -n "$devlist" ] ; then
 	--failfast ${devlist} \
 	|| error_exit "Cannot create MD array $MD3_NAME."
     (( MD_MAX++ ))
-    mdadm --wait /dev/${MD3_NAME}
+    wait_md ${MD3_NAME}
     MD_LOG4="/tmp/monitor_${MD_NAME}_step4.log"
     mdadm --detail /dev/${MD3_NAME} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG4}
     mdadm --brief --detail /dev/${MD3_NAME} >> /etc/mdadm.conf
@@ -92,7 +92,7 @@ while [ $step -lt $NUM_STEPS ] ; do
     echo "Reassemble MD array md$MD ..."
     mdadm --assemble /dev/md${MD} \
 	|| error_exit "Cannot assemble MD array md${MD}"
-    mdadm --wait /dev/md${MD}
+    wait_md md${MD}
     sleep 1
     MD_LOG6="/tmp/monitor_${MD_NAME}_step6.log"
     mdadm --detail /dev/md${MD} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG6}

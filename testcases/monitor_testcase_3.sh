@@ -45,7 +45,7 @@ if ! mdadm --manage /dev/${MD_NUM} --remove ${DEVICES_LEFT[@]} ; then
     error_exit "Cannot fail $d in MD array $MD_NUM"
 fi
 
-mdadm --wait /dev/${MD_NUM} || true
+wait_md ${MD_NUM}
 for devno in $DEVNOS_LEFT ; do
     if ! echo 0 > /sys/bus/ccw/devices/$devno/online ; then
 	error_exit "Cannot set device $devno offline"
@@ -77,11 +77,11 @@ done
 if ! mdadm --manage /dev/${MD_NUM} --fail ${DEVICES_RIGHT[@]} ; then
     error_exit "Cannot fail $d in MD array $MD_NUM"
 fi
-mdadm --wait /dev/${MD_NUM} || true
+wait_md ${MD_NUM}
 if ! mdadm --manage /dev/${MD_NUM} --remove ${DEVICES_RIGHT[@]} ; then
     error_exit "Cannot remove $d in MD array $MD_NUM"
 fi
-mdadm --wait /dev/${MD_NUM} || true
+wait_md ${MD_NUM}
 for devno in $DEVNOS_RIGHT ; do
     if ! echo 0 > /sys/bus/ccw/devices/$devno/online ; then
 	error_exit "Cannot set device $devno offline"

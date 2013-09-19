@@ -52,7 +52,7 @@ for d in ${DEVICES_LEFT[0]} ; do
     fi
     md_status=$(md_monitor -c "MonitorStatus:/dev/${MD_NUM}")
     echo "Monitor status: $md_status"
-    mdadm --wait /dev/${MD_NUM}
+    wait_md ${MD_NUM}
     echo "Reset device $d"
     if ! mdadm --zero-superblock --force $d ; then
 	error_exit "Cannot zero superblock on $d"
@@ -62,7 +62,7 @@ for d in ${DEVICES_LEFT[0]} ; do
     fi
 done
 mdadm --detail /dev/${MD_NUM}
-mdadm --wait /dev/${MD_NUM}
+wait_md ${MD_NUM}
 MD_TIMEOUT=15
 wait_time=0
 while [ $wait_time -lt $MD_TIMEOUT ] ; do
