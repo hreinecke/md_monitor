@@ -36,8 +36,11 @@ dd if=/dev/zero of=/mnt/testfile1 bs=4096 count=1024
 
 echo "Fail first half ..."
 mdadm --manage /dev/${MD_NUM} --fail ${DEVICES_LEFT[@]}
-mdadm --detail /dev/${MD_NUM}
-sleep 10
+
+if ! wait_for_sync ${MD_NUM} ; then
+    error_exit "First half still faulty"
+fi
+
 MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
 mdadm --detail /dev/${MD_NUM} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG1}
 if ! diff -u "${START_LOG}" "${MD_LOG1}" ; then
@@ -45,8 +48,10 @@ if ! diff -u "${START_LOG}" "${MD_LOG1}" ; then
 fi
 echo "Fail second half ..."
 mdadm --manage /dev/${MD_NUM} --fail ${DEVICES_RIGHT[@]}
-mdadm --detail /dev/${MD_NUM}
-sleep 10
+
+if ! wait_for_sync ${MD_NUM} ; then
+    error_exit "Second half still faulty"
+fi
 MD_LOG2="/tmp/monitor_${MD_NAME}_step2.log"
 mdadm --detail /dev/${MD_NUM} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG2}
 if ! diff -u "${START_LOG}" "${MD_LOG2}" ; then
