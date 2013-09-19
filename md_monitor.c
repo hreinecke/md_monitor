@@ -1919,7 +1919,7 @@ static int check_md(struct udev_device *md_dev, mdu_array_info_t *info)
 {
 	char devpath[256];
 	const char *devname;
-	int ioctl_fd;
+	int ioctl_fd, rc;
 
 	devname = udev_device_get_sysname(md_dev);
 	if (!devname || !strlen(devname))
@@ -1929,7 +1929,8 @@ static int check_md(struct udev_device *md_dev, mdu_array_info_t *info)
 	ioctl_fd = open(devpath, O_RDWR|O_NONBLOCK);
 	if (ioctl_fd >= 0) {
 		if (ioctl(ioctl_fd, GET_ARRAY_INFO, info) < 0) {
-			if (errno == ENODEV)
+			rc = errno;
+			if (rc == ENODEV)
 				info("%s: array stopped, ignoring", devname);
 			else
 				err("%s: ioctl GET_ARRAY_INFO failed: %m",
@@ -1937,15 +1938,16 @@ static int check_md(struct udev_device *md_dev, mdu_array_info_t *info)
 			info->raid_disks = 0;
 		} else if (info->raid_disks == 0) {
 			warn("%s: no RAID disks, ignoring", devname);
-			errno = EAGAIN;
+			rc = EAGAIN;
 		}
 		close(ioctl_fd);
 	} else {
+		rc = errno;
 		err("%s: could not open %s: %m", devname, devpath);
 		info->raid_disks = 0;
 	}
 	if (info->raid_disks < 1)
-		return errno;
+		return rc;
 
 	if (info->level != 10) {
 		err("%s: not a RAID10 array", devname);
@@ -2099,7 +2101,7 @@ static int display_md(struct md_monitor *md_dev, char *buf)
 	rc = check_md(md_dev->device, &info);
 	if (rc) {
 		pthread_mutex_unlock(&md_dev->lock);
-		return rc;
+		return -rc;
 	}
 	buf[0] = '\0';
 	list_for_each_entry(dev, &md_dev->children, siblings) {
