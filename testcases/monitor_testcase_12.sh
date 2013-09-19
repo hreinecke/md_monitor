@@ -19,6 +19,10 @@ activate_dasds
 clear_metadata
 
 modprobe vmcp
+userid=$(vmcp q userid | cut -f 1 -d ' ')
+if [ -z "$userid" ] ; then
+    error_exit "No z/VM userid"
+fi
 
 ulimit -c unlimited
 start_md ${MD_NUM}
@@ -44,12 +48,22 @@ for devno in ${DEVNOS_LEFT} ; do
     sleep $SLEEPTIME
 
     echo "$(date) Detach left device $devno ..."
-    vmcp det ${devno##*.}
+    dasd=${devno##*.}
+    if [ "$userid" = "LINUX025" ] ; then
+	linkcmd="vmcp link \* ${dasd} ${dasd}"
+    else
+	linkcmd="vmcp att ${dasd} \*"
+    fi
+    if ! vmcp det ${dasd} ; then
+	error_exit "Cannot detach DASD ${dasd}"
+    fi
     echo "$(date) Waiting for 15 seconds ..."
     sleep 15
     md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
     echo "$(date) Attach left device $devno ..."
-    vmcp link \* ${devno##*.} ${devno##*.}
+    if ! eval $linkcmd ; then
+	error_exit "Cannot attach DASD ${dasd}"
+    fi
     md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
 done
 
@@ -72,12 +86,22 @@ for devno in ${DEVNOS_RIGHT} ; do
     sleep $SLEEPTIME
     
     echo "$(date) Detach right device $devno ..."
-    vmcp det ${devno##*.}
+    dasd=${devno##*.}
+    if [ "$userid" = "LINUX025" ] ; then
+	linkcmd="vmcp link \* ${dasd} ${dasd}"
+    else
+	linkcmd="vmcp att ${dasd} \*"
+    fi
+    if ! vmcp det ${dasd} ; then
+	error_exit "Cannot detach DASD ${dasd}"
+    fi
     echo "$(date) Waiting for 15 seconds ..."
     sleep 15
     md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
     echo "$(date) Attach right device $devno ..."
-    vmcp link \* ${devno##*.} ${devno##*.}
+    if ! eval $linkcmd ; then
+	error_exit "Cannot attach DASD ${dasd}"
+    fi
     md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
 done
 

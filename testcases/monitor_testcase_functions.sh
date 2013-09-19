@@ -71,18 +71,18 @@ function start_md() {
     rm /var/log/messages
     rcsyslog restart
     MONITOR_PID=$(/sbin/md_monitor -y -p 7 -d -s)
-    trapcmd="stop_iotest"
+    trapcmd="reset_devices ; stop_iotest"
     if [ -n "$MONITOR_PID" ] ; then
 	trapcmd="$trapcmd ; ${MD_MONITOR} -c'Shutdown:/dev/console'"
     fi
     MDADM_PID=$(mdadm --monitor --scan --daemonise)
     if [ -n "$MDADM_PID" ] ; then
-	trapcmd="$trapcmd ; kill -TERM $MDADM_PID"
+	trapcmd="$trapcmd ; kill -TERM $MDADM_PID 2> /dev/null"
     fi
     iostat -kt 1 > /tmp/monitor_${MD_NAME}_iostat.log 2>&1 &
     IOSTAT_PID=$!
     if [ -n "$IOSTAT_PID" ] ; then
-	trapcmd="$trapcmd ; kill -TERM $IOSTAT_PID"
+	trapcmd="$trapcmd ; kill -TERM $IOSTAT_PID 2> /dev/null"
     fi
     if [ -n "$trapcmd" ] ; then
 	trap "$trapcmd" EXIT
@@ -307,6 +307,21 @@ function stop_iotest() {
 	wait ${DT_PID} 2> /dev/null || true
 	echo done
     fi
+}
+
+function reset_devices() {
+    userid=$(vmcp q userid | cut -f 1 -d ' ')
+    [ "$userid" ] || return
+    for devno in ${DEVNOS_LEFT} ${DEVNOS_RIGHT} ; do
+	dasd=${devno##*.}
+	if ! vmcp q v $dasd > /dev/null 2>&1 ; then
+	    if [ "$userid" = "LINUX025" ] ; then
+		vmcp link \* $dasd $dasd || true
+	    else
+		vmcp att $dasd \* || true
+	    fi
+	fi
+    done
 }
 
 function wait_for_sync () {
