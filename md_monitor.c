@@ -1060,9 +1060,12 @@ static enum dasd_io_status dasd_check_aio(struct device_monitor *dev,
 		if (timeout) {
 			warn("%s: path timeout", dev->dev_name);
 			io_status = IO_TIMEOUT;
-		} else {
+		} else if (dev->aio_active) {
 			dbg("%s: no events", dev->dev_name);
 			io_status = IO_PENDING;
+		} else {
+			dbg("%s: no async io submitted", dev->dev_name);
+			io_status = IO_UNKNOWN;
 		}
 	} else {
 		struct timeval diff, end_time;
@@ -1156,10 +1159,6 @@ void *dasd_monitor_thread (void *ctx)
 		    dev->dev_name, aio_timeout);
 		pthread_mutex_unlock(&dev->lock);
 		io_status = dasd_check_aio(dev, aio_timeout);
-		if (io_status == IO_UNKNOWN) {
-			pthread_mutex_lock(&dev->lock);
-			continue;
-		}
 		if (io_status == IO_ERROR) {
 			warn("%s: error during aio submission, exit",
 			     dev->dev_name);
@@ -1192,6 +1191,16 @@ void *dasd_monitor_thread (void *ctx)
 			aio_timeout = monitor_timeout;
 			dev->io_status = io_status;
 			pthread_mutex_lock(&dev->lock);
+			continue;
+		}
+		if (io_status == IO_UNKNOWN) {
+			/*
+			 * First round, we cannot really make any sane
+			 * decisions yet. Wait until we got the I/O
+			 * results.
+			 */
+			aio_timeout = monitor_timeout;
+			dev->io_status = io_status;
 			continue;
 		}
 		dev->io_status = io_status;
@@ -1536,10 +1545,25 @@ static void reset_mirror(struct device_monitor *dev)
 		if (md_dev->degraded && md_dev->degraded < 3) {
 			side = md_dev->degraded >> 1;
 		} else {
-			info("%s: device removed, no slot information",
-			     dev->dev_name);
-			pthread_mutex_unlock(&md_dev->lock);
-			return;
+			int nr_devs[2];
+
+			memset(nr_devs, 0, sizeof(int) * 2);
+			list_for_each_entry(tmp, &md_dev->children, siblings) {
+				if (tmp->md_slot < 0)
+					continue;
+				side = tmp->md_slot % (md_dev->layout & 0xFF);
+				nr_devs[side]++;
+			}
+			if (nr_devs[0] == 0) {
+				side = 0;
+			} else if (nr_devs[1] == 0) {
+				side = 1;
+			} else {
+				info("%s: device removed, no slot information",
+				     dev->dev_name);
+				pthread_mutex_unlock(&md_dev->lock);
+				return;
+			}
 		}
 	} else {
 		side = dev->md_slot % (md_dev->layout & 0xFF);
@@ -1553,6 +1577,8 @@ static void reset_mirror(struct device_monitor *dev)
 		     this_side, md_rdev_print_state(tmp->md_status),
 		     dasd_io_print_state(tmp->io_status));
 		if (tmp->md_status == RECOVERY)
+			continue;
+		if (tmp->io_status == IO_UNKNOWN)
 			continue;
 		if (this_side != side)
 			ready_devices++;
