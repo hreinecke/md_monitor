@@ -110,7 +110,7 @@ struct md_monitor {
 	struct list_head entry;
 	struct list_head children;
 	struct udev_device *device;
-	pthread_mutex_t lock;
+	pthread_mutex_t status_lock;
 	struct list_head pending;
 	enum md_rdev_status pending_status;
 	int pending_side;
@@ -390,9 +390,9 @@ static struct device_monitor * lookup_md_component(struct md_monitor *md_dev,
 	if (strncmp(devname, "dasd", 4)) {
 		lookup_symlinks = 1;
 	}
-	pthread_mutex_lock(&md_dev->lock);
+	pthread_mutex_lock(&md_dev->status_lock);
 	if (!md_dev->device) {
-		pthread_mutex_unlock(&md_dev->lock);
+		pthread_mutex_unlock(&md_dev->status_lock);
 		return NULL;
 	}
 	list_for_each_entry(tmp, &md_dev->children, siblings) {
@@ -424,7 +424,7 @@ static struct device_monitor * lookup_md_component(struct md_monitor *md_dev,
 		}
 	}
 out:
-	pthread_mutex_unlock(&md_dev->lock);
+	pthread_mutex_unlock(&md_dev->status_lock);
 	return found;
 }
 
@@ -450,7 +450,7 @@ static struct md_monitor *lookup_md_new(struct udev_device *md_dev)
 		udev_device_ref(md_dev);
 		INIT_LIST_HEAD(&md->children);
 		INIT_LIST_HEAD(&md->pending);
-		pthread_mutex_init(&md->lock, NULL);
+		pthread_mutex_init(&md->status_lock, NULL);
 		list_add(&md->entry, &md_list);
 	}
 	pthread_mutex_unlock(&md_lock);
@@ -563,10 +563,10 @@ static void attach_dasd(struct udev_device *dev)
 	unlock_device_list();
 	if (found_md) {
 		add_component(found_md, found, devname);
-		pthread_mutex_lock(&found_md->lock);
+		pthread_mutex_lock(&found_md->status_lock);
 		if (list_empty(&found->siblings))
 			list_add(&found->siblings, &found_md->children);
-		pthread_mutex_unlock(&found_md->lock);
+		pthread_mutex_unlock(&found_md->status_lock);
 		monitor_dasd(found);
 	} else {
 		dbg("%s: no md array found", devname);
@@ -1455,9 +1455,9 @@ static void fail_mirror(struct device_monitor *dev, enum md_rdev_status status)
 		return;
 	}
 
-	pthread_mutex_lock(&md_dev->lock);
+	pthread_mutex_lock(&md_dev->status_lock);
 	if (!md_dev->device) {
-		pthread_mutex_unlock(&md_dev->lock);
+		pthread_mutex_unlock(&md_dev->status_lock);
 		return;
 	}
 	if (dev->md_slot < 0) {
@@ -1473,7 +1473,7 @@ static void fail_mirror(struct device_monitor *dev, enum md_rdev_status status)
 		}
 		if (nr_devs[0] == nr_devs[1]) {
 			warn("%s: slot number unknown", dev->dev_name);
-			pthread_mutex_unlock(&md_dev->lock);
+			pthread_mutex_unlock(&md_dev->status_lock);
 			return;
 		}
 		side = nr_devs[0] > nr_devs[1] ? 1 : 0;
@@ -1511,7 +1511,7 @@ static void fail_mirror(struct device_monitor *dev, enum md_rdev_status status)
 		}
 	}
 
-	pthread_mutex_unlock(&md_dev->lock);
+	pthread_mutex_unlock(&md_dev->status_lock);
 }
 
 static void reset_mirror(struct device_monitor *dev)
@@ -1527,14 +1527,14 @@ static void reset_mirror(struct device_monitor *dev)
 		warn("%s: No md device found", dev->dev_name);
 		return;
 	}
-	pthread_mutex_lock(&md_dev->lock);
+	pthread_mutex_lock(&md_dev->status_lock);
 	if (!md_dev->device) {
-		pthread_mutex_unlock(&md_dev->lock);
+		pthread_mutex_unlock(&md_dev->status_lock);
 		return;
 	}
 	md_name = udev_device_get_sysname(md_dev->device);
 	if (md_dev->in_recovery) {
-		pthread_mutex_unlock(&md_dev->lock);
+		pthread_mutex_unlock(&md_dev->status_lock);
 		info("%s: array in recovery, skip reset", md_name);
 		return;
 	}
@@ -1559,7 +1559,7 @@ static void reset_mirror(struct device_monitor *dev)
 			} else {
 				info("%s: device removed, no slot information",
 				     dev->dev_name);
-				pthread_mutex_unlock(&md_dev->lock);
+				pthread_mutex_unlock(&md_dev->status_lock);
 				return;
 			}
 		}
@@ -1587,14 +1587,14 @@ static void reset_mirror(struct device_monitor *dev)
 	if (ready_devices != md_dev->raid_disks) {
 		info("%s: not enough devices to reset (%d/%d)", md_name,
 		     ready_devices, md_dev->raid_disks);
-		pthread_mutex_unlock(&md_dev->lock);
+		pthread_mutex_unlock(&md_dev->status_lock);
 		return;
 	}
 	info("%s: reset mirror, %d of %d devices ready", md_name,
 	     ready_devices, md_dev->raid_disks);
 	if (!list_empty(&md_dev->pending)) {
 		info("%s: reset already scheduled", md_name);
-		pthread_mutex_unlock(&md_dev->lock);
+		pthread_mutex_unlock(&md_dev->status_lock);
 		return;
 	}
 	pthread_mutex_lock(&pending_lock);
@@ -1603,7 +1603,7 @@ static void reset_mirror(struct device_monitor *dev)
 	list_add(&md_dev->pending, &pending_list);
 	pthread_cond_signal(&pending_cond);
 	pthread_mutex_unlock(&pending_lock);
-	pthread_mutex_unlock(&md_dev->lock);
+	pthread_mutex_unlock(&md_dev->status_lock);
 }
 
 static void fail_md_component(struct md_monitor *md_dev,
@@ -1710,7 +1710,7 @@ static void discover_md_components(struct md_monitor *md)
 	}
 	/* Temporarily move children devices onto a separate list */
 	INIT_LIST_HEAD(&update_list);
-	pthread_mutex_lock(&md->lock);
+	pthread_mutex_lock(&md->status_lock);
 	list_splice_init(&md->children, &update_list);
 	for (i = 0; i < 4096; i++) {
 		info.number = i;
@@ -1791,7 +1791,7 @@ static void discover_md_components(struct md_monitor *md)
 		monitor_dasd(found);
 		found = NULL;
 	}
-	pthread_mutex_unlock(&md->lock);
+	pthread_mutex_unlock(&md->status_lock);
 	if (!md->in_recovery) {
 		/* Cleanup stale devices */
 		list_for_each_entry_safe(found, tmp, &update_list, siblings) {
@@ -1890,10 +1890,10 @@ static void remove_md(struct md_monitor *md_dev)
 	struct list_head remove_list;
 
 	INIT_LIST_HEAD(&remove_list);
-	pthread_mutex_lock(&md_dev->lock);
+	pthread_mutex_lock(&md_dev->status_lock);
 	list_splice_init(&md_dev->children, &remove_list);
 	md_dev->device = NULL;
-	pthread_mutex_unlock(&md_dev->lock);
+	pthread_mutex_unlock(&md_dev->status_lock);
 
 	list_for_each_entry_safe(dev, tmp, &remove_list, siblings) {
 		info("%s: Remove MD component device",
@@ -1903,12 +1903,12 @@ static void remove_md(struct md_monitor *md_dev)
 	}
 
 	/* Synchronize with other threads */
-	pthread_mutex_lock(&md_dev->lock);
+	pthread_mutex_lock(&md_dev->status_lock);
 	info("%s: Stop monitoring",
 	     udev_device_get_devpath(device));
 	udev_device_unref(device);
-	pthread_mutex_unlock(&md_dev->lock);
-	pthread_mutex_destroy(&md_dev->lock);
+	pthread_mutex_unlock(&md_dev->status_lock);
+	pthread_mutex_destroy(&md_dev->status_lock);
 	free(md_dev);
 }
 
@@ -2025,9 +2025,9 @@ static int display_md_status(struct md_monitor *md_dev, char *buf, int buflen)
 		max_slot = buflen;
 	}
 	memset(buf, '.', max_slot);
-	pthread_mutex_lock(&md_dev->lock);
+	pthread_mutex_lock(&md_dev->status_lock);
 	if (!md_dev->device) {
-		pthread_mutex_unlock(&md_dev->lock);
+		pthread_mutex_unlock(&md_dev->status_lock);
 		return -ENODEV;
 	}
 	list_for_each_entry(dev, &md_dev->children, siblings) {
@@ -2041,7 +2041,7 @@ static int display_md_status(struct md_monitor *md_dev, char *buf, int buflen)
 		if (slot + 1> len)
 			len = slot + 1;
 	}
-	pthread_mutex_unlock(&md_dev->lock);
+	pthread_mutex_unlock(&md_dev->status_lock);
 
 	info("%s: md status %s", udev_device_get_sysname(md_dev->device), buf);
 	return max_slot;
@@ -2060,9 +2060,9 @@ static int display_io_status(struct md_monitor *md_dev, char *buf, int buflen)
 		max_slot = buflen;
 	}
 	memset(buf, '.', max_slot);
-	pthread_mutex_lock(&md_dev->lock);
+	pthread_mutex_lock(&md_dev->status_lock);
 	if (!md_dev->device) {
-		pthread_mutex_unlock(&md_dev->lock);
+		pthread_mutex_unlock(&md_dev->status_lock);
 		return -ENODEV;
 	}
 	list_for_each_entry(dev, &md_dev->children, siblings) {
@@ -2076,7 +2076,7 @@ static int display_io_status(struct md_monitor *md_dev, char *buf, int buflen)
 		if (slot + 1> len)
 			len = slot + 1;
 	}
-	pthread_mutex_unlock(&md_dev->lock);
+	pthread_mutex_unlock(&md_dev->status_lock);
 
 	info("%s: io status %s", udev_device_get_sysname(md_dev->device), buf);
 	return max_slot;
@@ -2090,14 +2090,14 @@ static int display_md(struct md_monitor *md_dev, char *buf)
 	int bufsize = 0, len = 0;
 	int rc;
 
-	pthread_mutex_lock(&md_dev->lock);
+	pthread_mutex_lock(&md_dev->status_lock);
 	if (!md_dev->device) {
-		pthread_mutex_unlock(&md_dev->lock);
+		pthread_mutex_unlock(&md_dev->status_lock);
 		return -ENODEV;
 	}
 	rc = check_md(md_dev->device, &info);
 	if (rc) {
-		pthread_mutex_unlock(&md_dev->lock);
+		pthread_mutex_unlock(&md_dev->status_lock);
 		return -rc;
 	}
 	buf[0] = '\0';
@@ -2129,7 +2129,7 @@ static int display_md(struct md_monitor *md_dev, char *buf)
 		strcat(buf + bufsize, status);
 		bufsize += len;
 	}
-	pthread_mutex_unlock(&md_dev->lock);
+	pthread_mutex_unlock(&md_dev->status_lock);
 	/* Strip trailing newline */
 	if (bufsize > 0)
 		bufsize--;
@@ -2267,9 +2267,9 @@ static void *mdadm_exec_thread (void *ctx)
 		list_for_each_entry_safe(md_dev, tmp, &active_list, pending) {
 			int do_fail = 0;
 
-			pthread_mutex_lock(&md_dev->lock);
+			pthread_mutex_lock(&md_dev->status_lock);
 			if (!md_dev->device) {
-				pthread_mutex_unlock(&md_dev->lock);
+				pthread_mutex_unlock(&md_dev->status_lock);
 				continue;
 			}
 			md_name = udev_device_get_sysname(md_dev->device);
@@ -2298,7 +2298,7 @@ static void *mdadm_exec_thread (void *ctx)
 				info("%s: all devices %s", md_name,
 				     do_fail ? "failed" : "reset");
 			}
-			pthread_mutex_unlock(&md_dev->lock);
+			pthread_mutex_unlock(&md_dev->status_lock);
 		}
 	}
 
