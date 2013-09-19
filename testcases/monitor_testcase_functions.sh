@@ -271,8 +271,13 @@ function run_dd() {
 	exec ${DT_PROG} of=${MNT}/dt.scratch bs=4k incr=var min=4k max=256k errors=1 procs=$CPUS oncerr=abort disable=pstats disable=fsync oflags=trunc errors=1 dispose=keep pattern=iot iotype=random runtime=24h limit=${SIZE} log=/tmp/dt.log > /dev/null 2>&1
     else
 	while true ; do
-	    dd if=/dev/random of=${MNT}/dd.scratch bs=4k count=${BLKS}
-	    dd if=${MNT}/dd.scratch of=/dev/null bs=4k count=${BLKS}
+	    dd if=/dev/random of=${MNT}/dd.scratch bs=4k count=${BLKS} &
+	    trap "kill $!" EXIT
+	    wait
+	    dd if=${MNT}/dd.scratch of=/dev/null bs=4k count=${BLKS} &
+	    trap "kill $!" EXIT
+	    wait
+	    trap - EXIT
 	done
     fi
 }
