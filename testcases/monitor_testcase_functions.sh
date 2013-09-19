@@ -283,7 +283,7 @@ function run_iotest() {
     local CPUS
     local BLKS
 
-    DT_PROG=$(which dt 2> /dev/null)
+    DT_PROG=$(which dt 2> /dev/null) || true
 
     BLKS=$(df | sed -n "s/[a-z/]*[0-9]* *[0-9]* *[0-9]* *\([0-9]*\) *[0-9]*% *.*${MNT##*/}/\1/p")
     if [ -z "$BLKS" ] ; then
@@ -300,7 +300,7 @@ function run_iotest() {
 }
 
 function stop_iotest() {
-    DT_PROG=$(which dt 2> /dev/null);
+    DT_PROG=$(which dt 2> /dev/null) || true
 
     jobs -r
     if kill -TERM %run_dd 2> /dev/null ; then
