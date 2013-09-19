@@ -350,8 +350,6 @@ function wait_for_sync () {
       echo "ERROR: array not started"
       return 1
   fi
-  cat /proc/mdstat
-  mdadm --detail /dev/$MD
 
   # Check overall status
   raid_status=$(sed -n 's/.*\[\([0-9]*\/[0-9]*\)\].*/\1/p' /proc/mdstat)
@@ -361,6 +359,7 @@ function wait_for_sync () {
   fi
   if [ $raid_disks -eq 0 ] ; then
       echo "ERROR: No raid disks on mirror ${MD}"
+      mdadm --detail /dev/${MD}
       return 1
   fi
 
@@ -402,6 +401,7 @@ function wait_for_sync () {
   done
   if [ $wait_time -ge $MONITORTIMEOUT ] ; then
       echo "ERROR: recovery didn't start after $MONITORTIMEOUT seconds"
+      mdadm --detail /dev/$MD
       return 1
   fi
   wait_md ${MD}
