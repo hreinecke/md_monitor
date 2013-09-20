@@ -85,9 +85,9 @@ while [ $step -lt $NUM_STEPS ] ; do
     echo "Stop MD array md$MD ..."
     mdadm --stop /dev/md${MD}
     sleep 1
-    mdadm --detail /dev/md${MD}
-    echo -n "MonitorStatus on /dev/md${MD}: "
-    md_monitor -c"MonitorStatus:/dev/md${MD}"
+    if md_monitor -c"ArrayStatus:/dev/md${MD}" > /dev/null ; then
+	error_exit "MD array md${MD} still working"
+    fi
     sleep $(expr $RANDOM / 1024)
     echo "Reassemble MD array md$MD ..."
     mdadm --assemble /dev/md${MD} \
