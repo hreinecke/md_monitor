@@ -115,9 +115,12 @@ fi
 echo "Monitor status: $new_status"
 
 wait_md ${MD_NUM}
-
 echo "MD status after mdadm --wait:"
 cat /proc/mdstat
+
+if ! wait_for_sync ${MD_NUM} ; then
+    error_exit "Failed to synchronize array"
+fi
 
 MD_LOG2="/tmp/monitor_${MD_NAME}_step2.log"
 mdadm --detail /dev/${MD_NUM} | grep Devices > ${MD_LOG2}
