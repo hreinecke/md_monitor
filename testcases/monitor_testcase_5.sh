@@ -18,13 +18,21 @@ detach_other_half=1
 
 logger "Monitor Testcase 5: Chpid vary on/off"
 
+modprobe vmcp
+userid=$(vmcp q userid | cut -f 1 -d ' ')
+if [ -z "$userid" ] ; then
+    error_exit "No z/VM userid"
+elif [ "$userid" != "LINUX021" ] ; then
+    echo "This testcase can only run on z/VM guest LINUX021"
+    trap - EXIT
+    exit 0
+fi
+
 stop_md $MD_NUM
 
 activate_dasds
 
 clear_metadata
-
-modprobe vmcp
 
 ulimit -c unlimited
 start_md ${MD_NUM}
