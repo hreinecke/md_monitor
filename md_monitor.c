@@ -1720,6 +1720,7 @@ static void discover_md_components(struct md_monitor *md)
 		return;
 	}
 
+	info("%s: discover", mdname);
 	md->in_discovery = 1;
 	sprintf(mdpath, "/dev/%s", mdname);
 	ioctl_fd = open(mdpath, O_RDWR|O_NONBLOCK);
@@ -1797,6 +1798,15 @@ static void discover_md_components(struct md_monitor *md)
 		if (!found) {
 			warn("%s: raid disk %d (%d:%d) not attached", mdname,
 			     i, info.major, info.minor);
+			udev = udev_device_get_udev(md->device);
+			raid_dev = udev_device_new_from_devnum(udev, 'b', mon_devt);
+			if (raid_dev) {
+				attach_dasd(raid_dev);
+				udev_device_unref(raid_dev);
+			} else {
+				warn("%s: raid disk %d (%d:%d) not found",
+				     mdname, i, info.major, info.minor);
+			}
 			continue;
 		}
 		found->md_index = i;
