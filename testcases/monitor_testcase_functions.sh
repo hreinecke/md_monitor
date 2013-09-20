@@ -73,21 +73,47 @@ function start_md() {
     MONITOR_PID=$(/sbin/md_monitor -y -p 7 -d -s)
     trapcmd="reset_devices ; stop_iotest"
     if [ -n "$MONITOR_PID" ] ; then
-	trapcmd="$trapcmd ; ${MD_MONITOR} -c'Shutdown:/dev/console'"
+	trapcmd="$trapcmd ; stop_monitor"
     fi
     MDADM_PID=$(mdadm --monitor --scan --daemonise)
     if [ -n "$MDADM_PID" ] ; then
-	trapcmd="$trapcmd ; kill -TERM $MDADM_PID 2> /dev/null"
+	trapcmd="$trapcmd ; stop_mdadm"
     fi
     iostat -kt 1 > /tmp/monitor_${MD_NAME}_iostat.log 2>&1 &
     IOSTAT_PID=$!
     if [ -n "$IOSTAT_PID" ] ; then
-	trapcmd="$trapcmd ; kill -TERM $IOSTAT_PID 2> /dev/null"
+	trapcmd="$trapcmd ; stop_iostat"
     fi
     if [ -n "$trapcmd" ] ; then
 	trap "$trapcmd" EXIT
+    fi
+}
+
+function stop_monitor() {
+    if [ -n "$MONITOR_PID" ] ; then
+	if ! /sbin/md_monitor -c'Shutdown:/dev/console' ; then
+	    echo "Failed to stop md_monitor"
+	    return 1
+	fi
+	MONITOR_PID=
+    fi
+    return 0
+}
+
+function stop_mdadm() {
+    if [ -n "$MDADM_PID" ] ; then
+	kill -TERM $MDADM_PID 2> /dev/null
 	MDADM_PID=
     fi
+    return 0
+}
+
+function stop_iostat() {
+    if [ -n "$IOSTAT_PID" ] ; then
+	kill -TERM $IOSTAT_PID 2> /dev/null
+	IOSTAT_PID=
+    fi
+    return 0
 }
 
 function stop_md() {
@@ -106,6 +132,9 @@ function stop_md() {
 	    exit 1
 	fi
     fi
+    trap - EXIT
+    stop_monitor
+    stop_mdadm
     rm -f ${START_LOG} ${STOP_LOG}
     for md in $(sed -n 's/^\(md[0-9]*\) .*/\1/p' /proc/mdstat) ; do
 	if [ "$md" = "$cur_md" ] ; then
@@ -120,8 +149,10 @@ function stop_md() {
 	    mdadm --stop /dev/$md
 	fi
     done
+    stop_iostat
     cp /var/log/messages /tmp/monitor_${MD_NAME}.log
     rm -f /etc/mdadm.conf
+    rm -f /tmp/monitor_${MD_NAME}_step*.log
 }
 
 function wait_md() {

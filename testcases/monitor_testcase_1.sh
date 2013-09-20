@@ -69,12 +69,8 @@ ls -l /mnt | tee ${MD_LOG4}
 if ! diff ${MD_LOG2} ${MD_LOG4} ; then
     error_exit "Filesystem contents differ"
 fi
-sleep 5
 
 echo "Umount filesystem ..."
 umount /mnt
 
-trap - EXIT
-
-rm -f /tmp/monitor_${MD_NAME}_step*.log
 stop_md ${MD_NUM}
