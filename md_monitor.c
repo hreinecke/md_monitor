@@ -491,6 +491,30 @@ static void dasd_monitor_put(struct device_monitor *dev)
 	pthread_mutex_unlock(&dev->lock);
 }
 
+static struct device_monitor *allocate_dasd(struct udev_device *dasd_dev)
+{
+	struct device_monitor *dev;
+
+	dev = malloc(sizeof(struct device_monitor));
+	if (!dev) {
+		err("%s: out of memory allocating device",
+		    udev_device_get_sysname(dasd_dev));
+		return NULL;
+	}
+	memset(dev, 0, sizeof(struct device_monitor));
+	dev->device = udev_device_get_parent(dasd_dev);
+	dev->ref = 1;
+	dev->md_slot = -1;
+	dev->md_index = -1;
+	dev->io_status = IO_UNKNOWN;
+	pthread_mutex_init(&dev->lock, NULL);
+	INIT_LIST_HEAD(&dev->siblings);
+	udev_device_ref(dev->device);
+	strcpy(dev->dev_name, udev_device_get_sysname(dasd_dev));
+
+	return dev;
+}
+
 static void attach_dasd(struct udev_device *dev)
 {
 	struct md_monitor *found_md = NULL;
@@ -539,23 +563,13 @@ static void attach_dasd(struct udev_device *dev)
 	if (found) {
 		info("%s: already attached", found->dev_name);
 	} else {
-		found = malloc(sizeof(struct device_monitor));
+		found = allocate_dasd(dev);
 		if (!found) {
 			err("%s: out of memory allocating device",
 			    udev_device_get_sysname(dev));
 			unlock_device_list();
 			return;
 		}
-		memset(found, 0, sizeof(struct device_monitor));
-		found->device = udev_device_get_parent(dev);
-		found->ref = 1;
-		found->md_slot = -1;
-		found->md_index = -1;
-		found->io_status = IO_UNKNOWN;
-		pthread_mutex_init(&found->lock, NULL);
-		INIT_LIST_HEAD(&found->siblings);
-		udev_device_ref(found->device);
-		strcpy(found->dev_name, udev_device_get_sysname(dev));
 		list_add(&found->entry, &device_list);
 		info("%s: attached '%s'", found->dev_name,
 		     udev_device_get_devpath(dev));
@@ -1801,13 +1815,13 @@ static void discover_md_components(struct md_monitor *md)
 			udev = udev_device_get_udev(md->device);
 			raid_dev = udev_device_new_from_devnum(udev, 'b', mon_devt);
 			if (raid_dev) {
-				attach_dasd(raid_dev);
+				found = allocate_dasd(raid_dev);
 				udev_device_unref(raid_dev);
 			} else {
 				warn("%s: raid disk %d (%d:%d) not found",
 				     mdname, i, info.major, info.minor);
+				continue;
 			}
-			continue;
 		}
 		found->md_index = i;
 		found->md_slot = info.raid_disk;
