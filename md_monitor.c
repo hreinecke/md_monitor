@@ -519,20 +519,16 @@ static void attach_dasd(struct udev_device *dev)
 	sprintf(devpath, "%s/holders",
 		udev_device_get_syspath(dev));
 	dirp = opendir(devpath);
-	if (!dirp) {
-		/* directory not present, that's okay */
-		dbg("%s: no holders directoy in sysfs, skipping",
-		    devname);
-		return;
+	if (dirp) {
+		while ((dirfd = readdir(dirp))) {
+			if (dirfd->d_name[0] == '.')
+				continue;
+			found_md = lookup_md_alias(dirfd->d_name);
+			if (found_md)
+				break;
+		}
+		closedir(dirp);
 	}
-	while ((dirfd = readdir(dirp))) {
-		if (dirfd->d_name[0] == '.')
-			continue;
-		found_md = lookup_md_alias(dirfd->d_name);
-		if (found_md)
-			break;
-	}
-	closedir(dirp);
 	lock_device_list();
 	list_for_each_entry(tmp, &device_list, entry) {
 		if (!strcmp(tmp->dev_name, devname)) {
