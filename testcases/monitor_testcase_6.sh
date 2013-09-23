@@ -3,6 +3,8 @@
 # Testcase 6: reserve DASDs w/ I/O
 #
 
+set -o errexit
+
 . $(dirname "$0")/monitor_testcase_functions.sh
 
 MD_NUM="md1"
