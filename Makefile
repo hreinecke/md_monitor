@@ -22,5 +22,10 @@ install: all
 	[ -d $(DESTDIR)$(MAN8DIR) ] || mkdir -p $(DESTDIR)$(MAN8DIR)
 	install -D -m 644 md_monitor.man $(DESTDIR)$(MAN8DIR)/md_monitor.8
 
-md_monitor: md_monitor.c
+md_monitor: md_monitor.o
 	$(CC) $(CFLAGS) -o $@ $^ -ludev -lpthread -laio
+
+md_monitor.o: md_monitor.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+md_monitor.c: md_debug.h list.h

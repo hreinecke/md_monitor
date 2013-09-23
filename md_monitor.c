@@ -51,9 +51,10 @@
 #include <dirent.h>
 #include <libaio.h>
 
-#include "list.h"
-
 #include <libudev.h>
+
+#include "list.h"
+#include "md_debug.h"
 
 #ifndef DASD_IOCTL_LETTER
  #define DASD_IOCTL_LETTER 'D'
@@ -171,7 +172,7 @@ static int checker_timeout = 1;
 static pid_t monitor_pid;
 FILE *logfd;
 
-static void log_fn(int priority, const char *format, ...)
+void log_fn(int priority, const char *format, ...)
 {
 	va_list ap;
 	time_t curtime;
@@ -195,11 +196,6 @@ static void log_fn(int priority, const char *format, ...)
 	}
 	va_end(ap);
 }
-
-#define dbg(fmt, args...) log_fn(LOG_DEBUG, fmt "\n", ##args)
-#define info(fmt, args...) log_fn(LOG_INFO, fmt "\n", ##args)
-#define warn(fmt, args...) log_fn(LOG_WARNING, fmt "\n", ##args)
-#define err(fmt, args...) log_fn(LOG_ERR, fmt "\n", ##args)
 
 struct md_rdev_state_t {
 	enum md_rdev_status state;
