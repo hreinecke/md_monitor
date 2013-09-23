@@ -8,7 +8,7 @@ MAN8DIR = $(MANDIR)/man8
 
 CFLAGS = -g -Wall $(OPTFLAGS)
 
-all: md_monitor
+all: md_monitor setdasd
 
 clean:
 	rm -f *.o
@@ -25,12 +25,20 @@ install: all
 md_monitor: md_monitor.o dasd_ioctl.o
 	$(CC) $(CFLAGS) -o $@ $^ -ludev -lpthread -laio
 
+setdasd: setdasd.o dasd_ioctl.o
+	$(CC) $(CFLAGS) -o $@ $^ -ludev -lpthread -laio
+
 md_monitor.o: md_monitor.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+setdasd.o: setdasd.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 dasd_ioctl.o: dasd_ioctl.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 md_monitor.c: md_debug.h dasd_ioctl.h list.h
+
+setdasd.c: md_debug.h dasd_ioctl.h
 
 dasd_ioctl.c: md_debug.h dasd_ioctl.h
