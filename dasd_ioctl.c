@@ -39,6 +39,14 @@
  /* Resume IO on device */
  #define BIODASDRESYNC  _IO(DASD_IOCTL_LETTER,241)
  #endif
+ #ifndef BIODASDQUIESCE
+ /* Quiesce IO on device */
+ #define BIODASDQUIESCE  _IO(DASD_IOCTL_LETTER,6)
+ #endif
+ #ifndef BIODASDRESUME
+ /* Resume IO on device */
+ #define BIODASDRESUME  _IO(DASD_IOCTL_LETTER,7)
+ #endif
 #endif
 
 int dasd_timeout_ioctl(struct udev_device *dev, int set)
@@ -73,6 +81,44 @@ int dasd_timeout_ioctl(struct udev_device *dev, int set)
 		} else {
 			dbg("%s: %s DASD timeout flag", devname,
 			    set ? "set" : "unset");
+		}
+	}
+	close(ioctl_fd);
+	return rc;
+}
+
+int dasd_quiesce_ioctl(struct udev_device *dev, int set)
+{
+	int ioctl_arg = set ? BIODASDQUIESCE : BIODASDRESUME;
+	int ioctl_fd;
+	const char *devname;
+	const char *devnode;
+	int rc = 0;
+
+	if (!dev)
+		return -EINVAL;
+
+	devnode = udev_device_get_devnode(dev);
+	devname = udev_device_get_sysname(dev);
+	dbg("%s: calling DASD ioctl '%s'", devname,
+	    set ? "BIODASDQUIESCE" : "BIODASDRESUME");
+	if (!devnode) {
+		warn("%s: device removed", devname);
+		return -ENXIO;
+	}
+	ioctl_fd = open(devnode, O_RDWR);
+	if (ioctl_fd < 0) {
+		warn("%s: cannot open %s for DASD ioctl: %m",
+		     devname, devnode);
+		rc = -errno;
+	} else {
+		if (ioctl(ioctl_fd, ioctl_arg) < 0) {
+			info("%s: cannot %s DASD: %m",
+			     devname, set ? "quiesce" : "resume");
+			rc = -errno;
+		} else {
+			dbg("%s: DASD %s", devname,
+			    set ? "quiesced" : "resumed");
 		}
 	}
 	close(ioctl_fd);

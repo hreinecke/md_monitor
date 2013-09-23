@@ -52,10 +52,12 @@ void log_fn(int priority, const char *format, ...)
 void usage(void)
 {
 	err("Usage: setdasd [--timeout=<set>|-t <set>] "
+	    "[--quiesce=<set>|-q <set>]"
 	    "[--device=<devnode>|-d <devnode>] "
 	    "[--sysfs=<devpath>|-s <devnode>] "
 	    "[--log-priority=<prio>|-p <prio>]\n"
 	    "  --timeout=<set>                set or unset timeout ioctl\n"
+	    "  --quiesce=<set>                quiesce or resume ioctl\n"
 	    "  --device=<devnode>             use device node <devno>\n"
 	    "  --sysfs=<devpath>              use sysfs path <devpath>\n"
 	    "  --log-priority=<prio>          set logging priority to <prio>\n"
@@ -73,9 +75,11 @@ int main(int argc, char **argv)
 	char *devnode = NULL;
 	char *p;
 	unsigned int timeout = -1;
+	unsigned int quiesce = -1;
 
 	static const struct option options[] = {
 		{ "timeout", required_argument, NULL, 't' },
+		{ "quiesce", required_argument, NULL, 'q' },
 		{ "device", required_argument, NULL, 'd' },
 		{ "sysfs", required_argument, NULL, 's' },
 		{ "log-priority", required_argument, NULL, 'p' },
@@ -90,7 +94,7 @@ int main(int argc, char **argv)
 		exit(1);
 
 	while (1) {
-		option = getopt_long(argc, argv, "d:p:s:t:vhV",
+		option = getopt_long(argc, argv, "d:p:q:s:t:vhV",
 				     options, NULL);
 		if (option == -1) {
 			break;
@@ -120,6 +124,17 @@ int main(int argc, char **argv)
 			if (log_priority < LOG_DEBUG)
 				log_priority++;
 			break;
+		case 'q':
+			quiesce = strtoul(optarg, &p, 10);
+			if (optarg == p) {
+				err("Invalid 'quiesce' parameter '%s'",
+				    optarg);
+				exit(1);
+			} else if (quiesce > 2) {
+				err("Invalid 'quiesce' parameter '%d', "
+				    "only '0' and '1' are allowed", quiesce);
+			}
+			break;
 		case 't':
 			timeout = strtoul(optarg, &p, 10);
 			if (optarg == p) {
@@ -145,8 +160,8 @@ int main(int argc, char **argv)
 		usage();
 		exit(1);
 	}
-	if (timeout == -1) {
-		err("Need to specify --timeout");
+	if (timeout == -1 && quiesce == -1) {
+		err("Need to specify --timeout or --quiesce");
 		usage();
 		exit(1);
 	}
@@ -191,7 +206,10 @@ int main(int argc, char **argv)
 			goto out;
 		}
 	}
-	rc = dasd_timeout_ioctl(dev, timeout);
+	if (quiesce == 0 || quiesce == 1)
+		rc = dasd_quiesce_ioctl(dev, quiesce);
+	else
+		rc = dasd_timeout_ioctl(dev, timeout);
 	udev_device_unref(dev);
 out:
 	udev_unref(udev);

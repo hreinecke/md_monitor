@@ -21,6 +21,7 @@
 #define _DASD_IOCTL_H
 
 extern int dasd_timeout_ioctl(struct udev_device *dev, int set);
+extern int dasd_quiesce_ioctl(struct udev_device *dev, int set);
 
 #endif /* _DASD_IOCTL_H */
 
