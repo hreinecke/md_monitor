@@ -55,18 +55,7 @@
 
 #include "list.h"
 #include "md_debug.h"
-
-#ifndef DASD_IOCTL_LETTER
- #define DASD_IOCTL_LETTER 'D'
-  #ifndef BIODASDTIMEOUT
-  /* TIMEOUT IO on device */
-  #define BIODASDTIMEOUT _IO(DASD_IOCTL_LETTER,240)
- #endif
- #ifndef BIODASDRESYNC
- /* Resume IO on device */
- #define BIODASDRESYNC  _IO(DASD_IOCTL_LETTER,241)
- #endif
-#endif
+#include "dasd_ioctl.h"
 
 const char version_str[] = "md_monitor version 4.26";
 
@@ -928,38 +917,6 @@ remove:
 	return rc;
 }
 
-static void dasd_timeout_ioctl(struct device_monitor *dev, int set)
-{
-	int ioctl_arg = set ? BIODASDTIMEOUT : BIODASDRESYNC;
-	int ioctl_fd;
-	const char *devnode;
-
-	if (!dev)
-		return;
-
-	devnode = udev_device_get_devnode(dev->device);
-	dbg("%s: calling DASD ioctl '%s'", dev->dev_name,
-	    set ? "BIODASDTIMEOUT" : "BIODASDRESYNC");
-	if (!devnode) {
-		warn("%s: device removed", dev->dev_name);
-		return;
-	}
-	ioctl_fd = open(devnode, O_RDWR);
-	if (ioctl_fd < 0) {
-		warn("%s: cannot open %s for DASD ioctl: %m",
-		     dev->dev_name, devnode);
-		return;
-	}
-	if (ioctl(ioctl_fd, ioctl_arg) < 0) {
-		info("%s: cannot %s DASD timeout flag: %m",
-		     dev->dev_name, set ? "set" : "unset");
-	} else {
-		dbg("%s: %s DASD timeout flag", dev->dev_name,
-		    set ? "set" : "unset");
-	}
-	close(ioctl_fd);
-}
-
 static int dasd_setup_aio(struct device_monitor *dev)
 {
 	const char *devnode = udev_device_get_devnode(dev->device);
@@ -1116,7 +1073,7 @@ void dasd_monitor_cleanup(void *data)
 	}
 	if (dev->fd >= 0) {
 		/* Reset any stale ioctl flags */
-		dasd_timeout_ioctl(dev, 0);
+		dasd_timeout_ioctl(dev->device, 0);
 		close(dev->fd);
 		dev->fd = -1;
 	}
@@ -1143,7 +1100,7 @@ void *dasd_monitor_thread (void *ctx)
 
 	dasd_monitor_get(dev);
 	/* Reset any stale ioctl flags */
-	dasd_timeout_ioctl(dev, 0);
+	dasd_timeout_ioctl(dev->device, 0);
 
 	dev->buf = NULL;
 	dev->fd = -1;
@@ -1420,7 +1377,7 @@ static int reset_component(struct device_monitor *dev)
 		return -EIO;
 	}
 
-	dasd_timeout_ioctl(dev, 0);
+	dasd_timeout_ioctl(dev->device, 0);
 
 	switch (dev->md_status) {
 	case FAULTY:
@@ -1882,8 +1839,9 @@ static void fail_md(struct md_monitor *md_dev)
 		pthread_mutex_lock(&md_dev->device_lock);
 		list_for_each_entry(dev, &md_dev->children, siblings) {
 			int this_side = dev->md_slot % (layout & 0xFF);
-			if (this_side == (pending_side >> 1))
-				dasd_timeout_ioctl(dev, 1);
+			if (this_side == (pending_side >> 1) &&
+			    dev->device)
+				dasd_timeout_ioctl(dev->device, 1);
 		}
 		pthread_mutex_unlock(&md_dev->device_lock);
 	} else {
