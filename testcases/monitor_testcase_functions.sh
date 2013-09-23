@@ -103,7 +103,7 @@ function stop_monitor() {
 
 function stop_mdadm() {
     if [ -n "$MDADM_PID" ] ; then
-	kill -TERM $MDADM_PID 2> /dev/null
+	kill -TERM $MDADM_PID 2> /dev/null || true
 	MDADM_PID=
     fi
     return 0
@@ -111,7 +111,7 @@ function stop_mdadm() {
 
 function stop_iostat() {
     if [ -n "$IOSTAT_PID" ] ; then
-	kill -TERM $IOSTAT_PID 2> /dev/null
+	kill -TERM $IOSTAT_PID 2> /dev/null || true
 	IOSTAT_PID=
     fi
     return 0
