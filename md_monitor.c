@@ -616,6 +616,7 @@ static void discover_dasd(struct udev *udev)
 	const char *dasd_devpath;
 
 	dasd_enumerate = udev_enumerate_new(udev);
+	udev_enumerate_add_match_subsystem(dasd_enumerate, "block");
 	udev_enumerate_add_match_sysname(dasd_enumerate, "dasd*");
 	udev_enumerate_scan_devices(dasd_enumerate);
 
@@ -919,26 +920,38 @@ remove:
 
 static int dasd_setup_aio(struct device_monitor *dev)
 {
-	const char *devnode = udev_device_get_devnode(dev->device);
+	char devnode[256];
 	int rc, flags;
 
+	devnode[0] = '\0';
+	if (udev_device_get_devnode(dev->device)) {
+		strcpy(devnode, udev_device_get_devnode(dev->device));
+	} else {
+		sprintf(devnode, "/dev/%s", dev->dev_name);
+	}
+	if (!strlen(devnode)) {
+		warn("%s: no device node found", dev->dev_name);
+		return ENXIO;
+	}
 	rc = io_setup(1, &dev->ioctx);
 	if (rc != 0) {
 		warn("%s: io_setup failed with %d",
 		     dev->dev_name, -rc);
 		dev->ioctx = 0;
-		return 1;
+		return -rc;
 	}
-	if (devnode && dev->fd < 0)
+	if (dev->fd < 0) {
 		dev->fd = open(devnode, O_RDONLY);
-	if (dev->fd  < 0) {
-		warn("%s: cannot open %s for aio: %m", dev->dev_name, devnode);
-		return 2;
+		if (dev->fd  < 0) {
+			warn("%s: cannot open %s for aio: %m",
+			     dev->dev_name, devnode);
+			return errno;
+		}
 	}
 	flags = fcntl(dev->fd, F_GETFL);
 	if (flags < 0) {
 		warn("%s: fcntl GETFL failed: %m", dev->dev_name);
-		return 3;
+		return errno;
 	}
 
 	if (!(flags & O_DIRECT)) {

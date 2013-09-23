@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <syslog.h>
+#include <string.h>
 #include <errno.h>
 
 #include "libudev.h"
@@ -54,18 +55,26 @@ int dasd_timeout_ioctl(struct udev_device *dev, int set)
 	int ioctl_arg = set ? BIODASDTIMEOUT : BIODASDRESYNC;
 	int ioctl_fd;
 	const char *devname;
-	const char *devnode;
+	char devnode[256];
 	int rc = 0;
 
 	if (!dev)
 		return -EINVAL;
 
-	devnode = udev_device_get_devnode(dev);
 	devname = udev_device_get_sysname(dev);
+	if (!devname)
+		return -ENXIO;
+
+	devnode[0] = '\0';
+	if (udev_device_get_devnode(dev)) {
+		strcpy(devnode, udev_device_get_devnode(dev));
+	} else {
+		sprintf(devnode, "/dev/%s", devname);
+	}
 	dbg("%s: calling DASD ioctl '%s'", devname,
 	    set ? "BIODASDTIMEOUT" : "BIODASDRESYNC");
-	if (!devnode) {
-		warn("%s: device removed", devname);
+	if (!strlen(devnode)) {
+		warn("%s: device node not found", devname);
 		return -ENXIO;
 	}
 	ioctl_fd = open(devnode, O_RDWR);
