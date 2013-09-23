@@ -3,6 +3,8 @@
 # Testcase 11: multiple array start & shutdown
 #
 
+set -o errexit
+
 . $(dirname "$0")/monitor_testcase_functions.sh
 
 MD_NUM="md1"
@@ -67,7 +69,7 @@ if [ -n "$devlist" ] ; then
 	--raid-devices=4 ${MD_ARGS} --level=raid10 \
 	--failfast ${devlist} \
 	|| error_exit "Cannot create MD array $MD3_NAME."
-    (( MD_MAX++ ))
+    (( MD_MAX++ )) || true
     wait_md ${MD3_NAME}
     MD_LOG4="/tmp/monitor_${MD_NAME}_step4.log"
     mdadm --detail /dev/${MD3_NAME} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG4}
@@ -80,8 +82,8 @@ fi
 
 step=0
 while [ $step -lt $NUM_STEPS ] ; do
-    MD=$(expr $RANDOM % $MD_MAX)
-    (( MD++ ))
+    MD=$(expr $RANDOM % $MD_MAX) || true
+    (( MD++ )) || true
     echo "Stop MD array md$MD ..."
     mdadm --stop /dev/md${MD}
     sleep 1
@@ -120,7 +122,7 @@ while [ $step -lt $NUM_STEPS ] ; do
 	error_exit "Monitor information on md${MD} is inconsistent"
     fi
     sleep $(expr $RANDOM / 1024)
-    (( step++ ))
+    (( step++ )) || true
 done
 
 mdadm --stop /dev/${MD2_NAME}
