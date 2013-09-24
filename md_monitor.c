@@ -1391,6 +1391,7 @@ static int reset_component(struct device_monitor *dev)
 	}
 
 	dasd_timeout_ioctl(dev->device, 0);
+	dasd_set_attribute(dev, "failfast", 1);
 
 	switch (dev->md_status) {
 	case FAULTY:
@@ -1620,7 +1621,8 @@ static void fail_md_component(struct md_monitor *md_dev,
 	md_status = md_rdev_check_state(dev);
 	if (md_status == UNKNOWN ||
 	    md_status == RECOVERY ||
-	    md_status == SPARE) {
+	    md_status == SPARE ||
+	    md_status == BLOCKED) {
 		/*
 		 * UNKNOWN is set if the path checkers hasn't
 		 * run yet.
@@ -1628,6 +1630,8 @@ static void fail_md_component(struct md_monitor *md_dev,
 		 * been scheduled.
 		 * SPARE is set if the device is marked as 'spare',
 		 * ie doesn't participate in the currently active array.
+		 * BLOCKED is set if the other side of an already
+		 * degraded MD array returns an I/O failure.
 		 * In either case we shouldn't fail the array.
 		 */
 		warn("%s: device status %s, ignore state change",
@@ -1863,9 +1867,9 @@ static void fail_md(struct md_monitor *md_dev)
 		pthread_mutex_lock(&md_dev->device_lock);
 		list_for_each_entry(dev, &md_dev->children, siblings) {
 			int this_side = dev->md_slot % (layout & 0xFF);
-			if (this_side == (pending_side >> 1) &&
-			    dev->device)
+			if (this_side == (pending_side >> 1)) {
 				dasd_timeout_ioctl(dev->device, 1);
+			}
 		}
 		pthread_mutex_unlock(&md_dev->device_lock);
 	} else {
@@ -1886,6 +1890,8 @@ static void fail_md(struct md_monitor *md_dev)
 			int this_side = dev->md_slot % (layout & 0xFF);
 			if (this_side == (pending_side >> 1)) {
 				fail_component(dev, pending_status);
+			} else {
+				dasd_set_attribute(dev, "failfast", 0);
 			}
 		}
 		pthread_mutex_unlock(&md_dev->device_lock);
