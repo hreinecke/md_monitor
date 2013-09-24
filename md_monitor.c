@@ -1144,17 +1144,21 @@ void *dasd_monitor_thread (void *ctx)
 			pthread_mutex_lock(&dev->lock);
 			break;
 		}
-		/* Re-check; status might have been changed during aio */
-		md_status = md_rdev_check_state(dev);
-		if (md_status == UNKNOWN) {
-			/* array has been stopped */
-			pthread_mutex_lock(&dev->lock);
-			break;
-		}
+		if (io_status != IO_TIMEOUT) {
+			/* Re-check; status might have been changed during aio */
+			md_status = md_rdev_check_state(dev);
+			if (md_status == UNKNOWN) {
+				/* array has been stopped */
+				pthread_mutex_lock(&dev->lock);
+				break;
+			}
 
-		/* Write status back */
-		pthread_mutex_lock(&dev->lock);
-		new_status = md_rdev_update_state(dev, md_status);
+			/* Write status back */
+			pthread_mutex_lock(&dev->lock);
+			new_status = md_rdev_update_state(dev, md_status);
+		} else {
+			new_status = TIMEOUT;
+		}
 		if (io_status == IO_PENDING) {
 			/*
 			 * io_getevents or sigtimedwait
