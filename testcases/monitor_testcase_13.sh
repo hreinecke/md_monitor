@@ -3,6 +3,8 @@
 # Testcase 13: Pick up failed array
 #
 
+set -o errexit
+
 . $(dirname "$0")/monitor_testcase_functions.sh
 
 MD_NUM="md1"
@@ -53,11 +55,11 @@ while [ $sleeptime -lt $MONITOR_TIMEOUT  ] ; do
     if [ "$raid_status" ] ; then
 	raid_disks=${raid_status%/*}
 	working_disks=${raid_status#*/}
-	failed_disks=$(( raid_disks - working_disks))
+	failed_disks=$(( raid_disks - working_disks)) || true
 	[ $working_disks -eq $failed_disks ] && break;
     fi
     sleep 1
-    (( sleeptime ++ ))
+    (( sleeptime ++ )) || true
 done
 if [ $sleeptime -lt $MONITOR_TIMEOUT ] ; then
     echo "$(date) MD monitor picked up changes after $sleeptime seconds"
@@ -96,13 +98,13 @@ while [ $num -gt 0  ] ; do
     for d in ${DASDS_LEFT[@]} ; do
 	device=$(sed -n "s/${MD_NUM}.* \(${d}1\[[0-9]*\]\).*/\1/p" /proc/mdstat)
 	if [ "$device" ] ; then
-	    (( num -- ))
+	    (( num -- )) || true
 	fi
     done
     [ $num -eq 0 ] && break
     num=${#DASDS_LEFT[@]}
     sleep 1
-    (( sleeptime ++ ))
+    (( sleeptime ++ )) || true
 done
 if [ $sleeptime -lt $MONITOR_TIMEOUT ] ; then
     echo "$(date) MD monitor picked up changes after $sleeptime seconds"
@@ -136,11 +138,11 @@ if [ "$detach_other_half" ] ; then
 	if [ "$raid_status" ] ; then
 	    raid_disks=${raid_status%/*}
 	    working_disks=${raid_status#*/}
-	    failed_disks=$(( raid_disks - working_disks))
+	    failed_disks=$(( raid_disks - working_disks)) || true
 	    [ $working_disks -eq $failed_disks ] && break;
 	fi
 	sleep 1
-	(( sleeptime ++ ))
+	(( sleeptime ++ )) || true
     done
     if [ $sleeptime -lt $MONITOR_TIMEOUT ] ; then
 	echo "MD monitor picked up changes after $sleeptime seconds"
@@ -170,13 +172,13 @@ if [ "$detach_other_half" ] ; then
 	for d in ${DASDS_LEFT[@]} ; do
 	    device=$(sed -n "s/${MD_NUM}.* \(${d}1\[[0-9]*\]\).*/\1/p" /proc/mdstat)
 	    if [ "$device" ] ; then
-		(( num -- ))
+		(( num -- )) || true
 	    fi
 	done
 	[ $num -eq 0 ] && break
 	num=${#DASDS_LEFT[@]}
 	sleep 1
-	(( sleeptime ++ ))
+	(( sleeptime ++ )) || true
     done
     if [ $sleeptime -lt $MONITOR_TIMEOUT ] ; then
 	echo "MD monitor picked up changes after $sleeptime seconds"
