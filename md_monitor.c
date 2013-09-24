@@ -1618,9 +1618,20 @@ static void fail_md_component(struct md_monitor *md_dev,
 	info("%s: notify for device state change", dev->dev_name);
 
 	md_status = md_rdev_check_state(dev);
-	if (md_status == UNKNOWN || md_status == RECOVERY) {
-		warn("%s: device status %s", dev->dev_name,
-		     md_rdev_print_state(md_status));
+	if (md_status == UNKNOWN ||
+	    md_status == RECOVERY ||
+	    md_status == SPARE) {
+		/*
+		 * UNKNOWN is set if the path checkers hasn't
+		 * run yet.
+		 * RECOVERY is set if a mdadm --re-add has
+		 * been scheduled.
+		 * SPARE is set if the device is marked as 'spare',
+		 * ie doesn't participate in the currently active array.
+		 * In either case we shouldn't fail the array.
+		 */
+		warn("%s: device status %s, ignore state change",
+		     dev->dev_name, md_rdev_print_state(md_status));
 		return;
 	}
 	pthread_mutex_lock(&dev->lock);
