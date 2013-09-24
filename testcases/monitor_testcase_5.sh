@@ -131,7 +131,8 @@ if [ -z "$detach_other_half" ] ; then
 fi
 
 echo "$(date) Wait for sync"
-wait_for_sync ${MD_NUM}
+wait_for_sync ${MD_NUM} || \
+    error_exit "Failed to synchronize array"
 
 MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
 mdadm --detail /dev/${MD_NUM} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG1}
@@ -202,7 +203,9 @@ if [ -n "$detach_other_half" ] ; then
     echo "$(date) Stop I/O test"
     stop_iotest
 
-    wait_for_sync ${MD_NUM}
+    wait_for_sync ${MD_NUM} || \
+	error_exit "Failed to synchronize array"
+
     mdadm --detail /dev/${MD_NUM}
 fi
 

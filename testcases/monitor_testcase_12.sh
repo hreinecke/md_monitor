@@ -73,7 +73,7 @@ echo "$(date) Wait for sync"
 if ! wait_for_sync ${MD_NUM} ; then
     md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
     stop_iotest
-    error_exit "mirror not synchronized"
+    error_exit "Failed to synchronize array"
 fi
 echo "$(date) mirror synchronized"
 MD_LOG2="/tmp/monitor_${MD_NAME}_step2.log"
@@ -110,7 +110,7 @@ done
 echo "$(date) Wait for sync"
 if ! wait_for_sync ${MD_NUM} ; then
     stop_iotest
-    error_exit "mirror not synchronized"
+    error_exit "Failed to synchronize array"
 fi
 echo "$(date) sync finished"
 MD_LOG3="/tmp/monitor_${MD_NAME}_step3.log"

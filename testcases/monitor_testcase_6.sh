@@ -177,7 +177,8 @@ echo "$(date) Stop I/O test"
 stop_iotest
 
 echo "$(date) Wait for sync ..."
-wait_for_sync ${MD_NUM}
+wait_for_sync ${MD_NUM} || \
+    error_exit "Failed to synchronize array"
 
 mdadm --detail /dev/${MD_NUM}
 

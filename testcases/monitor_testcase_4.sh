@@ -114,7 +114,8 @@ echo "$(date) Stop I/O test"
 stop_iotest
 
 echo "$(date) Wait for sync"
-wait_for_sync ${MD_NUM}
+wait_for_sync ${MD_NUM} || \
+    error_exit "Failed to synchronize array"
 
 MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
 mdadm --detail /dev/${MD_NUM} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG1}
@@ -187,7 +188,9 @@ if [ "$detach_other_half" ] ; then
 	error_exit "$(date) ERROR: $num devices are still faulty"
     fi
     
-    wait_for_sync ${MD_NUM}
+    wait_for_sync ${MD_NUM} || \
+	error_exit "Failed to synchronize array"
+
     mdadm --detail /dev/${MD_NUM}
 fi
 

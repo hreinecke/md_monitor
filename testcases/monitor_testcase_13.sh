@@ -117,9 +117,8 @@ echo "$(date) Stop I/O test"
 stop_iotest
 
 echo "$(date) Wait for sync"
-if ! wait_for_sync ${MD_NUM} ; then
-    error_exit "Mirror not synchronized"
-fi
+wait_for_sync ${MD_NUM} || \
+    error_exit "Failed to synchronize array"
 
 mdadm --detail /dev/${MD_NUM}
 
@@ -185,7 +184,8 @@ if [ "$detach_other_half" ] ; then
 	echo "ERROR: $num devices are still faulty"
     fi
     
-    wait_for_sync ${MD_NUM}
+    wait_for_sync ${MD_NUM} || \
+	error_exit "Failed to synchronize array"
     mdadm --detail /dev/${MD_NUM}
 fi
 

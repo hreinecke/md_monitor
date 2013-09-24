@@ -42,9 +42,12 @@ mdadm --grow /dev/${MD_NUM} --raid-devices=8 \
     || error_exit "Cannot expand array"
 
 echo "Waiting for reshape to finish"
-wait_for_sync ${MD_NUM} || error_exit "TEST FAILED, wait_for_sync indicated an error"
+wait_for_sync ${MD_NUM} || \
+    error_exit "Failed to synchronize array"
+
 
 # Wait for lazy bitmap update to finish
+echo "Wait for bitmap to clear"
 sleeptime=0
 while [ $sleeptime -lt $RESHAPE_TIMEOUT ] ; do
     dirty=$(sed -n 's/.*bitmap: \([0-9]*\)\/[0-9]* pages.*/\1/p' /proc/mdstat)
@@ -56,6 +59,7 @@ if [ $sleeptime -ge $RESHAPE_TIMEOUT ] ; then
     error_exit "Bitmap not cleared after $sleeptime seconds"
 fi
 
+echo "Resize bitmap"
 mdadm --grow /dev/${MD_NUM} --bitmap=none \
     || error_exit "Cannot remove bitmap"
 
@@ -76,7 +80,7 @@ mdadm --grow /dev/${MD_NUM} --raid-devices=6 \
     || error_exit "Cannot reshape array"
 
 wait_for_sync ${MD_NUM} \
-    || error_exit "TEST FAILED, wait_for_sync indicated an error"
+    || error_exit "Failed to synchronize array"
 
 sleep 5
 
