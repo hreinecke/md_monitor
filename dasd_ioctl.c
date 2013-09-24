@@ -101,17 +101,25 @@ int dasd_quiesce_ioctl(struct udev_device *dev, int set)
 	int ioctl_arg = set ? BIODASDQUIESCE : BIODASDRESUME;
 	int ioctl_fd;
 	const char *devname;
-	const char *devnode;
+	char devnode[256];
 	int rc = 0;
 
 	if (!dev)
 		return -EINVAL;
 
-	devnode = udev_device_get_devnode(dev);
 	devname = udev_device_get_sysname(dev);
+	if (!devname)
+		return -ENXIO;
+
+	devnode[0] = '\0';
+	if (udev_device_get_devnode(dev)) {
+		strcpy(devnode, udev_device_get_devnode(dev));
+	} else {
+		sprintf(devnode, "/dev/%s", devname);
+	}
 	dbg("%s: calling DASD ioctl '%s'", devname,
 	    set ? "BIODASDQUIESCE" : "BIODASDRESUME");
-	if (!devnode) {
+	if (!strlen(devnode)) {
 		warn("%s: device removed", devname);
 		return -ENXIO;
 	}
