@@ -347,6 +347,13 @@ function stop_iotest() {
 }
 
 function reset_devices() {
+    local dasd
+    local devno
+
+    for dasd in ${DEVICES_LEFT[@]} ${DEVICES_RIGHT[@]} ; do
+	setdasd -q 0 -d /dev/${dasd}
+    done
+
     userid=$(vmcp q userid | cut -f 1 -d ' ')
     [ "$userid" ] || return
     for devno in ${DEVNOS_LEFT} ${DEVNOS_RIGHT} ; do
