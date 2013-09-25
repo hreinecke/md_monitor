@@ -58,7 +58,7 @@ function chp_reset() {
     chchp -v 1 $CHPID_RIGHT
 }
 
-add_recovery_fn chp_reset
+push_recovery_fn chp_reset
 
 echo "$(date) vary off on chpid $CHPID_LEFT for the left side"
 logger "Vary off chpid $CHPID_LEFT"

@@ -348,9 +348,17 @@ function stop_iotest() {
 
 declare -a RECOVERY_HOOKS
 
-function add_recovery_fn() {
-    [ -z "$1" ] && echo "WARNING: no parameters passed to add_recovery_fn"
+function push_recovery_fn() {
+    [ -z "$1" ] && echo "WARNING: no parameters passed to push_recovery_fn"
     RECOVERY_HOOKS[${#RECOVERY_HOOKS[*]}]="$1"
+}
+
+function pop_recovery_fn() {
+    local num_hooks=${#RECOVERY_HOOKS[*]}
+
+    [ $num_hooks -eq 0 ] && return
+    (( num_hooks--)) || true
+    unset RECOVERY_HOOKS[$num_hooks]
 }
 
 function reset_devices() {

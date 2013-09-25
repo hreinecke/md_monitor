@@ -35,11 +35,6 @@ while [ $n -lt 7 ] ; do
 done
 
 MD2_NAME="md2"
-# stop the extra md in case of failure
-function stop_extra_mds_1() {
-    mdadm --stop /dev/${MD2_NAME}
-}
-add_recovery_fn stop_extra_mds_1
 MD_ARGS="--bitmap=internal --chunk=1024 --bitmap-chunk=512K --assume-clean --force"
 echo "Create MD array $MD2_NAME ..."
 mdadm --create /dev/${MD2_NAME} --name=${MD2_NAME} \
@@ -47,6 +42,11 @@ mdadm --create /dev/${MD2_NAME} --name=${MD2_NAME} \
     --failfast ${devlist} \
     || error_exit "Cannot create MD array $MD2_NAME."
 
+# stop the extra md in case of failure
+function stop_extra_mds_1() {
+    mdadm --stop /dev/${MD2_NAME}
+}
+push_recovery_fn stop_extra_mds_1
 wait_md ${MD2_NAME}
 MD_LOG2="/tmp/monitor_${MD_NAME}_step2.log"
 mdadm --detail /dev/${MD2_NAME} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG2}
@@ -72,13 +72,13 @@ if [ -n "$devlist" ] ; then
     function stop_extra_mds_2() {
 	mdadm --stop /dev/${MD3_NAME}
     }
-    add_recovery_fn stop_extra_mds_2
     echo "Create MD array $MD3_NAME ..."
     mdadm --create /dev/${MD3_NAME} --name=${MD3_NAME} \
 	--raid-devices=4 ${MD_ARGS} --level=raid10 \
 	--failfast ${devlist} \
 	|| error_exit "Cannot create MD array $MD3_NAME."
     (( MD_MAX++ )) || true
+    push_recovery_fn stop_extra_mds_2
     wait_md ${MD3_NAME}
     MD_LOG4="/tmp/monitor_${MD_NAME}_step4.log"
     mdadm --detail /dev/${MD3_NAME} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG4}
