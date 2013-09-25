@@ -33,7 +33,7 @@ if ! mount /dev/${MD_NUM} /mnt ; then
 fi
 
 MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
-md_monitor -c"ArrayStatus:/dev/${MD_NUM}" > ${MD_LOG1}
+md_monitor -c"ArrayStatus:/dev/${MD_NUM}" | sort -k3,3 > ${MD_LOG1}
 
 echo "Write test file 1 ..."
 dd if=/dev/zero of=/mnt/testfile1 bs=4096 count=1024
@@ -80,7 +80,7 @@ echo "Wait for md_monitor to pick up changes"
 sleeptime=0
 MD_LOG2="/tmp/monitor_${MD_NAME}_step2.log"
 while [ $sleeptime -lt $MONITOR_TIMEOUT ] ; do
-    md_monitor -c"ArrayStatus:/dev/${MD_NUM}" > ${MD_LOG2}
+    md_monitor -c"ArrayStatus:/dev/${MD_NUM}" | sort -k3,3 > ${MD_LOG2}
     if diff -pu "${MD_LOG1}" "${MD_LOG2}" > /dev/null ; then
 	break;
     fi
@@ -130,7 +130,7 @@ echo "Wait for md_monitor to pick up changes"
 sleeptime=0
 MD_LOG3="/tmp/monitor_${MD_NAME}_step3.log"
 while [ $sleeptime -lt $MONITOR_TIMEOUT ] ; do
-    md_monitor -c"ArrayStatus:/dev/${MD_NUM}" > ${MD_LOG3}
+    md_monitor -c"ArrayStatus:/dev/${MD_NUM}" | sort -k3,3 > ${MD_LOG3}
     if diff -pu "${MD_LOG1}" "${MD_LOG3}" > /dev/null ; then
 	break;
     fi
