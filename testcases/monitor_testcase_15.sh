@@ -8,7 +8,7 @@ set -o errexit
 . $(dirname "$0")/monitor_testcase_functions.sh
 
 IO_TIMEOUT=10
-MONITOR_TIMEOUT=60
+MONITOR_TIMEOUT=15
 
 logger "Monitor Testcase 15: Reserve DASDs w/ I/O on root on MD"
 
@@ -29,10 +29,16 @@ run_wget() {
 
 MD_DEV=$(mount | grep ' / ' | cut -d ' ' -f 1)
 MD_NUM=${MD_DEV##*/}
+if [ "${MD_NUM##md}" = "${MD_NUM}" ] ; then
+    echo "Testcase can only be run with root on MD"
+    exit 0
+fi
+
 for dasd in $(mdadm --detail ${MD_DEV} | sed -n 's/.*set-A failfast *\/dev\/\(.*\)/\1/p') ; do
     dasd=${dasd%1}
     DASDS_LEFT+=("$dasd")
 done
+num=0
 for dasd in ${DASDS_LEFT[@]}  ; do
     devno=$(lsdasd | sed -n "/$dasd/p" | cut -f 1 -d ' ')
     echo "$(date) Reserve DASD $devno on left half ..."
@@ -48,8 +54,13 @@ for dasd in ${DASDS_LEFT[@]}  ; do
 	echo "$result"
 	exit 1
     fi
+    (( num++ )) || true
     break;
 done
+
+if [ $num -eq 0 ] ; then
+    error_exit "No DASDs have been reserved"
+fi
 
 echo "$(date) Wait for reservation on left half ..."
 sleeptime=0
