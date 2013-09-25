@@ -351,7 +351,7 @@ function reset_devices() {
     local devno
 
     for dasd in ${DEVICES_LEFT[@]} ${DEVICES_RIGHT[@]} ; do
-	setdasd -q 0 -d /dev/${dasd}
+	setdasd -q 0 -d /dev/${dasd} || true
     done
 
     userid=$(vmcp q userid | cut -f 1 -d ' ')
