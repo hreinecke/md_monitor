@@ -346,6 +346,13 @@ function stop_iotest() {
     fi
 }
 
+declare -a RECOVERY_HOOKS
+
+function add_recovery_fn() {
+    [ -z "$1" ] && echo "WARNING: no parameters passed to add_recovery_fn"
+    RECOVERY_HOOKS[${#RECOVERY_HOOKS[*]}]="$1"
+}
+
 function reset_devices() {
     local dasd
     local devno
@@ -365,6 +372,11 @@ function reset_devices() {
 		vmcp att $dasd \* || true
 	    fi
 	fi
+    done
+
+    for fn in "${RECOVERY_HOOKS[@]}"; do
+	echo "calling \"$fn\""
+	eval $fn || true
     done
 }
 
