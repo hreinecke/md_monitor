@@ -354,11 +354,14 @@ function push_recovery_fn() {
 }
 
 function pop_recovery_fn() {
-    local num_hooks=${#RECOVERY_HOOKS[*]}
+    local fn=$1
+    local num_hook=${#RECOVERY_HOOKS[*]}
 
-    [ $num_hooks -eq 0 ] && return
-    (( num_hooks--)) || true
-    unset RECOVERY_HOOKS[$num_hooks]
+    [ $num_hook -eq 0 ] && return 1
+    (( num_hook--)) || true
+    eval ${RECOVERY_HOOKS[$num_hook]} || true
+    unset RECOVERY_HOOKS[$num_hook]
+    return 0
 }
 
 function reset_devices() {
