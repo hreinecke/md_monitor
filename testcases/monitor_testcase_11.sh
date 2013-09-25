@@ -35,6 +35,11 @@ while [ $n -lt 7 ] ; do
 done
 
 MD2_NAME="md2"
+# stop the extra md in case of failure
+function stop_extra_mds_1() {
+    mdadm --stop /dev/${MD2_NAME}
+}
+add_recovery_fn stop_extra_mds_1
 MD_ARGS="--bitmap=internal --chunk=1024 --bitmap-chunk=512K --assume-clean --force"
 echo "Create MD array $MD2_NAME ..."
 mdadm --create /dev/${MD2_NAME} --name=${MD2_NAME} \
@@ -64,6 +69,10 @@ while [ $n -lt 9 ] ; do
 done
 if [ -n "$devlist" ] ; then
     MD3_NAME="md3"
+    function stop_extra_mds_2() {
+	mdadm --stop /dev/${MD3_NAME}
+    }
+    add_recovery_fn stop_extra_mds_2
     echo "Create MD array $MD3_NAME ..."
     mdadm --create /dev/${MD3_NAME} --name=${MD3_NAME} \
 	--raid-devices=4 ${MD_ARGS} --level=raid10 \
