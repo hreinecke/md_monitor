@@ -50,6 +50,16 @@ fi
 echo "$(date) Run I/O test"
 run_iotest /mnt;
 
+# clean up for the channel path stuff
+function chp_reset() {
+    chchp -c 1 $CHPID_LEFT
+    chchp -v 1 $CHPID_LEFT
+    chchp -c 1 $CHPID_RIGHT
+    chchp -v 1 $CHPID_RIGHT
+}
+
+add_recovery_fn chp_reset
+
 echo "$(date) vary off on chpid $CHPID_LEFT for the left side"
 logger "Vary off chpid $CHPID_LEFT"
 chchp -v 0 $CHPID_LEFT
