@@ -11,8 +11,6 @@ MD_NUM="md1"
 MD_NAME="testcase8"
 SLEEPTIME=30
 
-logger "Monitor Testcase 8: Accidental DASD overwrite"
-
 stop_md $MD_NUM
 
 activate_dasds
@@ -20,7 +18,12 @@ activate_dasds
 clear_metadata
 
 modprobe vmcp
-
+userid=$(vmcp q userid | cut -f 1 -d ' ')
+if [ -z "$userid" ] ; then
+    echo "This testcase can only run under z/VM"
+    trap - EXIT
+    exit 0
+fi
 ulimit -c unlimited
 start_md $MD_NUM
 
@@ -33,6 +36,9 @@ echo "Mount filesystem ..."
 if ! mount /dev/${MD_NUM} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
+
+logger "${MD_NAME}: Accidental DASD overwrite"
+
 MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
 mdadm --detail /dev/${MD_NUM} | grep Devices > ${MD_LOG1}
 
@@ -132,6 +138,8 @@ fi
 # The array configuration is different from the original one,
 # so we cannot compare the final and the initial state
 unset START_LOG
+
+logger "${MD_NAME}: success"
 
 echo "Umount filesystem ..."
 umount /mnt
