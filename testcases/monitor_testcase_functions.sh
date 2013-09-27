@@ -170,9 +170,9 @@ function activate_dasds() {
     local devno_max=$1
     local devno;
     local dasd;
-    local DEVNO_LEFT_START="0xa000"
+    local DEVNO_LEFT_START="0xa010"
     local DEVNO_LEFT_END="0xa0c8"
-    local DEVNO_RIGHT_START="0xa100"
+    local DEVNO_RIGHT_START="0xa110"
     local DEVNO_RIGHT_END="0xa1c8"
     local i=0
 
