@@ -10,8 +10,6 @@ set -o errexit
 MD_NUM="md1"
 MD_NAME="testcase2"
 
-logger "Monitor Testcase 2: Fail both mirror sides w/o I/O"
-
 stop_md $MD_NUM
 
 activate_dasds
@@ -20,6 +18,8 @@ clear_metadata
 
 ulimit -c unlimited
 start_md ${MD_NUM}
+
+logger "${MD_NAME}: Fail both mirror sides w/o I/O"
 
 echo "Create filesystem ..."
 if ! mkfs.ext3 /dev/${MD_NUM} ; then
@@ -61,5 +61,7 @@ rm -f ${MD_LOG1} ${MD_LOG2}
 
 echo "Umount filesystem ..."
 umount /mnt
+
+logger "${MD_NAME}: success"
 
 stop_md ${MD_NUM}
