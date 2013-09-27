@@ -12,8 +12,6 @@ MD_NAME="testcase6"
 IO_TIMEOUT=10
 MONITOR_TIMEOUT=60
 
-logger "Monitor Testcase 6: Reserve DASDs w/ I/O"
-
 stop_md $MD_NUM
 
 activate_dasds
@@ -32,6 +30,8 @@ echo "$(date) Mount filesystem ..."
 if ! mount /dev/${MD_NUM} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
+
+logger "${MD_NAME}: Reserve DASDs w/ I/O"
 
 echo "$(date) Run I/O test"
 run_iotest /mnt;
@@ -181,6 +181,8 @@ wait_for_sync ${MD_NUM} || \
     error_exit "Failed to synchronize array"
 
 mdadm --detail /dev/${MD_NUM}
+
+logger "${MD_NAME}: success"
 
 echo "$(date) Umount filesystem ..."
 umount /mnt
