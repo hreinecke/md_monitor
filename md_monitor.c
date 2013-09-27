@@ -1620,7 +1620,8 @@ static void fail_md_component(struct md_monitor *md_dev,
 	 * Fail does not necessarily indicate the device has gone,
 	 * so just invoke a state check.
 	 */
-	info("%s: notify for device state change", dev->dev_name);
+	info("%s: fail component in state %s", dev->dev_name,
+	     md_rdev_print_state(dev->md_status));
 
 	md_status = md_rdev_check_state(dev);
 	if (md_status == UNKNOWN ||
