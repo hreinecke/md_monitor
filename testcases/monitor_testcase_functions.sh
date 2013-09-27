@@ -144,6 +144,7 @@ function stop_md() {
     trap - EXIT
     stop_monitor
     stop_mdadm
+    stop_iostat
     rm -f ${START_LOG} ${STOP_LOG}
     for md in $(sed -n 's/^\(md[0-9]*\) .*/\1/p' /proc/mdstat) ; do
 	if [ "$md" = "$cur_md" ] ; then
@@ -158,7 +159,6 @@ function stop_md() {
 	    mdadm --stop /dev/$md
 	fi
     done
-    stop_iostat
     cp /var/log/messages /tmp/monitor_${MD_NAME}.log
     rm -f /etc/mdadm.conf
     rm -f /tmp/monitor_${MD_NAME}_step*.log
