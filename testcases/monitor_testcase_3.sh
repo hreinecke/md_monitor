@@ -11,8 +11,6 @@ MD_NUM="md1"
 MD_NAME="testcase3"
 MONITOR_TIMEOUT=30
 
-logger "Monitor Testcase 3: Disk offline/online"
-
 function online_dasd() {
     local devno=$1
 
@@ -29,6 +27,8 @@ clear_metadata
 
 ulimit -c unlimited
 start_md ${MD_NUM}
+
+logger "${MD_NAME}: Disk offline/online"
 
 echo "Create filesystem ..."
 if ! mkfs.ext3 /dev/${MD_NUM} ; then
@@ -166,5 +166,7 @@ EOE
 
 echo "Umount filesystem ..."
 umount /mnt
+
+logger "${MD_NAME}: success"
 
 stop_md ${MD_NUM}
