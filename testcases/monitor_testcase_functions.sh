@@ -73,13 +73,17 @@ function start_md() {
     MONITOR_PID=$(/sbin/md_monitor -y -p 7 -d -s)
     trapcmd="[ \$? -ne 0 ] && echo TEST FAILED while executing \'\$BASH_COMMAND\', EXITING"
     trapcmd="$trapcmd ; reset_devices ; stop_iotest"
-    if [ -n "$MONITOR_PID" ] ; then
-	trapcmd="$trapcmd ; stop_monitor"
+    if [ -z "$MONITOR_PID" ] ; then
+	error_exit "Failed to start md_monitor"
     fi
+    trapcmd="$trapcmd ; stop_monitor"
+
     MDADM_PID=$(mdadm --monitor --scan --daemonise)
-    if [ -n "$MDADM_PID" ] ; then
-	trapcmd="$trapcmd ; stop_mdadm"
+    if [ -z "$MDADM_PID" ] ; then
+	error_exit "Failed to start mdadm"
     fi
+    trapcmd="$trapcmd ; stop_mdadm"
+
     iostat -kt 1 > /tmp/monitor_${MD_NAME}_iostat.log 2>&1 &
     IOSTAT_PID=$!
     if [ -n "$IOSTAT_PID" ] ; then
