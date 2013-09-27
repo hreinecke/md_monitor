@@ -111,8 +111,12 @@ function stop_mdadm() {
 
 function stop_iostat() {
     if [ -n "$IOSTAT_PID" ] ; then
-	kill -TERM $IOSTAT_PID 2> /dev/null || true
-	IOSTAT_PID=
+	if kill -TERM $IOSTAT_PID 2> /dev/null ; then
+	    echo -n "waiting for iostat to finish ... "
+	    wait %iostat 2> /dev/null || true
+	    echo done
+	    IOSTAT_PID=
+	fi
     fi
     return 0
 }
@@ -338,7 +342,6 @@ function run_iotest() {
 function stop_iotest() {
     DT_PROG=$(which dt 2> /dev/null) || true
 
-    jobs -r
     if kill -TERM %run_dd 2> /dev/null ; then
 	echo -n "waiting for ${DT_PROG:-dd} to finish ... "
 	wait %run_dd 2> /dev/null || true
