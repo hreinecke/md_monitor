@@ -11,7 +11,18 @@ MD_NUM="md1"
 MD_NAME="testcase4"
 MONITOR_TIMEOUT=60
 
-logger "Monitor Testcase 4: Disk detach/attach"
+function attach_dasd() {
+    local userid=$1
+    local devno=$2
+    
+    if [ "$userid" = "LINUX025" ] ; then
+	vmcp link \* ${devno##*.} ${devno##*.} || \
+	    error_exit "Cannot link device $devno"
+    else
+	vmcp att ${devno##*.} \* || \
+	    error_exit "Cannot attach device $devno"
+    fi
+}
 
 stop_md $MD_NUM
 
@@ -24,6 +35,8 @@ userid=$(vmcp q userid | cut -f 1 -d ' ')
 
 ulimit -c unlimited
 start_md ${MD_NUM}
+
+logger "${MD_NAME}: Disk detach/attach"
 
 echo "$(date) Create filesystem ..."
 if ! mkfs.ext3 /dev/${MD_NUM} ; then
@@ -41,6 +54,7 @@ run_iotest /mnt;
 echo "$(date) Detach disk on first half ..."
 for devno in ${DEVNOS_LEFT} ; do
     vmcp det ${devno##*.}
+    push_recovery_fn "attach_dasd $userid ${devno##*.}"
     break;
 done
 
@@ -61,28 +75,19 @@ done
 if [ $sleeptime -lt $MONITOR_TIMEOUT ] ; then
     echo "$(date) MD monitor picked up changes after $sleeptime seconds"
 else
-    echo "$(date) ERROR: $working_disks / $raid_disks are still working"
-    # test failed but bail out after re-attaching the disk
-    TEST_FAILED=1
+    error_exit "$working_disks / $raid_disks are still working"
 fi
 
-if [ -z "$TEST_FAILED" ] ; then
-    echo "$(date) Wait for 10 seconds"
-    sleep 10
-    mdadm --detail /dev/${MD_NUM}
-fi
+echo "$(date) Wait for 10 seconds"
+sleep 10
+mdadm --detail /dev/${MD_NUM}
 
 echo "$(date) Re-attach disk on first half ..."
-for devno in $DEVNOS_LEFT ; do
-    if [ "$userid" = "LINUX025" ] ; then
-	vmcp link \* ${devno##*.} ${devno##*.}
-    else
-	vmcp att ${devno##*.} \*
+while true ; do
+    if ! pop_recovery_fn ; then
+	break;
     fi
-    break
 done
-
-[ -n "$TEST_FAILED" ] && error_exit "TEST FAILED DUE TO THE ABOVE TIMEOUT ERROR"
 
 echo "$(date) Ok. Waiting for MD to pick up changes ..."
 # Wait for md_monitor to pick up changes
@@ -127,6 +132,7 @@ if [ "$detach_other_half" ] ; then
     echo "Detach disk on second half ..."
     for devno in ${DEVNOS_RIGHT} ; do
 	vmcp det ${devno##*.}
+	push_recovery_fn "attach_dasd $userid ${devno##*.}"
 	break;
     done
 
@@ -146,24 +152,18 @@ if [ "$detach_other_half" ] ; then
     if [ $sleeptime -lt $MONITOR_TIMEOUT ] ; then
 	echo "$(date) MD monitor picked up changes after $sleeptime seconds"
     else
-	echo "$(date) ERROR: $working_disks / $raid_disks are still working"
-	TEST_FAILED=1
+	error_exit "$working_disks / $raid_disks are still working"
     fi
 
     sleep 5
     mdadm --detail /dev/${MD_NUM}
     ls /mnt
     echo "Re-attach disk on second half ..."
-    for devno in $DEVNOS_RIGHT ; do
-	if [ "$userid" = "LINUX025" ] ; then
-	    vmcp link \* ${devno##*.} ${devno##*.}
-	else
-	    vmcp att ${devno##*.} \*
+    while true ; do
+	if ! pop_recovery_fn ; then
+	    break;
 	fi
-	break;
     done
-
-    [ -n "$TEST_FAILED" ] && error_exit "TEST FAILED DUE TO THE ABOVE TIMEOUT ERROR"
 
     echo "$(date) Ok. Waiting for MD to pick up changes ..."
     # Wait for md_monitor to pick up changes
@@ -193,6 +193,8 @@ if [ "$detach_other_half" ] ; then
 
     mdadm --detail /dev/${MD_NUM}
 fi
+
+logger "${MD_NAME}: success"
 
 echo "$(date) Umount filesystem ..."
 umount /mnt

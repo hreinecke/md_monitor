@@ -380,19 +380,6 @@ function reset_devices() {
 	setdasd -q 0 -d /dev/${dasd} || true
     done
 
-    userid=$(vmcp q userid | cut -f 1 -d ' ')
-    [ "$userid" ] || return
-    for devno in ${DEVNOS_LEFT} ${DEVNOS_RIGHT} ; do
-	dasd=${devno##*.}
-	if ! vmcp q v $dasd > /dev/null 2>&1 ; then
-	    if [ "$userid" = "LINUX025" ] ; then
-		vmcp link \* $dasd $dasd || true
-	    else
-		vmcp att $dasd \* || true
-	    fi
-	fi
-    done
-
     for fn in "${RECOVERY_HOOKS[@]}"; do
 	echo "calling \"$fn\""
 	eval $fn || true
