@@ -1799,7 +1799,7 @@ static void discover_md_components(struct md_monitor *md)
 			warn("%s: raid disk %d (%d:%d) not attached", mdname,
 			     i, info.major, info.minor);
 			udev = udev_device_get_udev(md->device);
-			raid_dev = udev_device_new_from_devnum(udev, 'b', mon_devt);
+			raid_dev = udev_device_new_from_devnum(udev, 'b', raid_devt);
 			if (raid_dev) {
 				found = allocate_dasd(raid_dev);
 				udev_device_unref(raid_dev);
