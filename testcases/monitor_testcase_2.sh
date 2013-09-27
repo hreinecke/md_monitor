@@ -36,6 +36,7 @@ dd if=/dev/zero of=/mnt/testfile1 bs=4096 count=1024
 
 echo "Fail first half ..."
 mdadm --manage /dev/${MD_NUM} --fail ${DEVICES_LEFT[@]}
+wait_md ${MD_NUM}
 
 if ! wait_for_sync ${MD_NUM} ; then
     error_exit "First half still faulty"
@@ -48,7 +49,7 @@ if ! diff -u "${START_LOG}" "${MD_LOG1}" ; then
 fi
 echo "Fail second half ..."
 mdadm --manage /dev/${MD_NUM} --fail ${DEVICES_RIGHT[@]}
-
+wait_md ${MD_NUM}
 if ! wait_for_sync ${MD_NUM} ; then
     error_exit "Second half still faulty"
 fi
