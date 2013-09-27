@@ -12,7 +12,18 @@ MD_NAME="testcase12"
 MONITOR_TIMEOUT=60
 SLEEPTIME=30
 
-logger "Monitor Testcase 12: Successive Disk detach/attach"
+function attach_dasd() {
+    local userid=$1
+    local devno=$2
+    
+    if [ "$userid" = "LINUX025" ] ; then
+	vmcp link \* ${devno##*.} ${devno##*.} || \
+	    error_exit "Cannot link device $devno"
+    else
+	vmcp att ${devno##*.} \* || \
+	    error_exit "Cannot attach device $devno"
+    fi
+}
 
 stop_md $MD_NUM
 
@@ -28,6 +39,8 @@ fi
 
 ulimit -c unlimited
 start_md ${MD_NUM}
+
+logger "${MD_NAME}: Successive Disk detach/attach"
 
 echo "$(date) Create filesystem ..."
 if ! mkfs.ext3 /dev/${MD_NUM} ; then
@@ -51,21 +64,17 @@ for devno in ${DEVNOS_LEFT} ; do
 
     echo "$(date) Detach left device $devno ..."
     dasd=${devno##*.}
-    if [ "$userid" = "LINUX025" ] ; then
-	linkcmd="vmcp link \* ${dasd} ${dasd}"
-    else
-	linkcmd="vmcp att ${dasd} \*"
-    fi
     if ! vmcp det ${dasd} ; then
 	error_exit "Cannot detach DASD ${dasd}"
     fi
+    push_recovery_fn "attach_dasd $userid ${dasd}"
     echo "$(date) Waiting for 15 seconds ..."
     sleep 15
     md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
     echo "$(date) Attach left device $devno ..."
-    if ! eval $linkcmd ; then
+    pop_recovery_fn || \
 	error_exit "Cannot attach DASD ${dasd}"
-    fi
+
     md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
 done
 
@@ -89,19 +98,15 @@ for devno in ${DEVNOS_RIGHT} ; do
     
     echo "$(date) Detach right device $devno ..."
     dasd=${devno##*.}
-    if [ "$userid" = "LINUX025" ] ; then
-	linkcmd="vmcp link \* ${dasd} ${dasd}"
-    else
-	linkcmd="vmcp att ${dasd} \*"
-    fi
     if ! vmcp det ${dasd} ; then
 	error_exit "Cannot detach DASD ${dasd}"
     fi
+    push_recovery_fn "attach_dasd $userid ${dasd}"
     echo "$(date) Waiting for 15 seconds ..."
     sleep 15
     md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
     echo "$(date) Attach right device $devno ..."
-    if ! eval $linkcmd ; then
+    if ! pop_recovery_fn ; then
 	error_exit "Cannot attach DASD ${dasd}"
     fi
     md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
@@ -109,16 +114,16 @@ done
 
 echo "$(date) Wait for sync"
 if ! wait_for_sync ${MD_NUM} ; then
-    stop_iotest
     error_exit "Failed to synchronize array"
 fi
 echo "$(date) sync finished"
 MD_LOG3="/tmp/monitor_${MD_NAME}_step3.log"
 md_monitor -c"ArrayStatus:/dev/${MD_NUM}" > ${MD_LOG3}
 if ! diff -pu ${MD_LOG1} ${MD_LOG3} ; then
-    stop_iotest
     error_exit "MD monitor reported array failure"
 fi
+
+logger "${MD_NAME}: success"
 
 echo "$(date) Stop I/O test"
 stop_iotest
