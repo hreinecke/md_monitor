@@ -11,8 +11,6 @@ MD_NUM="md1"
 MD_NAME="testcase7"
 RESHAPE_TIMEOUT=60
 
-logger "Monitor Testcase 7: expand RAID"
-
 stop_md $MD_NUM
 
 activate_dasds
@@ -21,6 +19,8 @@ clear_metadata
 
 ulimit -c unlimited
 start_md $MD_NUM 6
+
+logger "${MD_NAME}: expand RAID"
 
 echo "Create filesystem ..."
 if ! mkfs.ext3 /dev/${MD_NUM} ; then
@@ -92,6 +92,8 @@ for dev in $(mdadm --detail /dev/${MD_NUM} | sed -n 's/.*spare *\(\/dev\/dasd[a-
 done
 
 mdadm --detail /dev/${MD_NUM}
+
+logger "${MD_NAME}: success"
 
 echo "Umount filesystem ..."
 umount /mnt
