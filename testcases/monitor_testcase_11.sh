@@ -11,8 +11,6 @@ MD_NUM="md1"
 MD_NAME="testcase11"
 NUM_STEPS=8
 
-logger "Monitor Testcase 11: Multiple Array startup/shutdown"
-
 stop_md $MD_NUM
 
 activate_dasds 16
@@ -21,6 +19,8 @@ clear_metadata
 
 ulimit -c unlimited
 start_md ${MD_NUM} 8
+
+logger "${MD_NAME}: Multiple Array startup/shutdown"
 
 sleep 1
 echo -n "MonitorStatus on /dev/${MD_NUM}: "
@@ -93,18 +93,20 @@ step=0
 while [ $step -lt $NUM_STEPS ] ; do
     MD=$(expr $RANDOM % $MD_MAX) || true
     (( MD++ )) || true
+    old_status=$(md_monitor -c"MonitorStatus:/dev/md${MD}")
     echo "Stop MD array md$MD ..."
     mdadm --stop /dev/md${MD}
     sleep 1
     if md_monitor -c"ArrayStatus:/dev/md${MD}" > /dev/null ; then
 	error_exit "MD array md${MD} still working"
     fi
-    sleep $(expr $RANDOM / 1024)
+    sleeptime=$(expr $RANDOM / 1024 || true)
+    echo "Waiting for $sleeptime seconds ..."
+    sleep $sleeptime
     echo "Reassemble MD array md$MD ..."
     mdadm --assemble /dev/md${MD} \
 	|| error_exit "Cannot assemble MD array md${MD}"
     wait_md md${MD}
-    sleep 1
     MD_LOG6="/tmp/monitor_${MD_NAME}_step6.log"
     mdadm --detail /dev/md${MD} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG6}
     if [ ${MD} -eq 1 ] ; then
@@ -124,15 +126,27 @@ while [ $step -lt $NUM_STEPS ] ; do
     elif [ ${MD} -eq 3 ] ; then
 	MD_LOGN=${MD_LOG5}
     fi
-    echo -n "MonitorStatus on /dev/md${MD}: "
-    MD_LOG7="/tmp/monitor_${MD_NAME}_step7.log"
-    md_monitor -c"MonitorStatus:/dev/md${MD}" | tee ${MD_LOG7}
-    if ! diff -u "${MD_LOGN}" "${MD_LOG7}" ; then
+    wait_time=0
+    MD_TIMEOUT=15
+    while [ $wait_time -lt $MD_TIMEOUT ] ; do
+	new_status=$(md_monitor -c"MonitorStatus:/dev/md${MD}" || true)
+	echo "MonitorStatus on /dev/md${MD}: $new_status"
+	if [ "$new_status" = "$old_status" ] ; then
+	    break;
+	fi
+	(( wait_time++ )) || true
+	sleep 1
+    done
+    if [ "$new_status" != "$old_status" ] ; then
 	error_exit "Monitor information on md${MD} is inconsistent"
     fi
-    sleep $(expr $RANDOM / 1024)
+    sleeptime=$(expr $RANDOM / 1024 || true)
+    echo "Waiting for $sleeptime seconds ..."
+    sleep $sleeptime
     (( step++ )) || true
 done
+
+logger "${MD_NAME}: success"
 
 mdadm --stop /dev/${MD2_NAME}
 mdadm --stop /dev/${MD3_NAME}
