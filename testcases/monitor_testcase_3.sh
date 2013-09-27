@@ -13,6 +13,14 @@ MONITOR_TIMEOUT=30
 
 logger "Monitor Testcase 3: Disk offline/online"
 
+function online_dasd() {
+    local devno=$1
+
+    if ! echo 1 > /sys/bus/ccw/devices/$devno/online ; then
+	error_exit "Cannot set device $devno online"
+    fi
+}
+
 stop_md $MD_NUM
 
 activate_dasds
@@ -32,8 +40,7 @@ if ! mount /dev/${MD_NUM} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
 
-MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
-md_monitor -c"ArrayStatus:/dev/${MD_NUM}" | sort -k3,3 > ${MD_LOG1}
+MD_LOG1=$(md_monitor -c"MonitorStatus:/dev/${MD_NUM}")
 
 echo "Write test file 1 ..."
 dd if=/dev/zero of=/mnt/testfile1 bs=4096 count=1024
@@ -54,6 +61,7 @@ for devno in $DEVNOS_LEFT ; do
     if ! echo 0 > /sys/bus/ccw/devices/$devno/online ; then
 	error_exit "Cannot set device $devno offline"
     fi
+    push_recovery_fn "online_dasd $devno"
 done
 echo "Write test file 2 ..."
 dd if=/dev/zero of=/mnt/testfile2 bs=4096 count=1024
@@ -61,11 +69,12 @@ sleep 6
 mdadm --detail /dev/${MD_NUM}
 ls -l /mnt
 echo "Restart first half ..."
-for devno in $DEVNOS_LEFT ; do
-    if ! echo 1 > /sys/bus/ccw/devices/$devno/online ; then
-	error_exit "Cannot set device $devno online"
+while true ; do
+    if ! pop_recovery_fn ; then
+	break;
     fi
 done
+
 #
 # wait_for_sync will fail here, as the devices
 # are being activated from udev on a one-by-one
@@ -78,16 +87,16 @@ done
 #
 echo "Wait for md_monitor to pick up changes"
 sleeptime=0
-MD_LOG2="/tmp/monitor_${MD_NAME}_step2.log"
 while [ $sleeptime -lt $MONITOR_TIMEOUT ] ; do
-    md_monitor -c"ArrayStatus:/dev/${MD_NUM}" | sort -k3,3 > ${MD_LOG2}
-    if diff -pu "${MD_LOG1}" "${MD_LOG2}" > /dev/null ; then
+    MD_LOG2=$(md_monitor -c"MonitorStatus:/dev/${MD_NUM}")
+    if [ "${MD_LOG1}" = "${MD_LOG2}" ] ; then
 	break;
     fi
     (( sleeptime ++ )) || true
     sleep 1
 done
 if [ $sleeptime -ge $MONITOR_TIMEOUT ] ; then
+    echo "Monitor status does not match: is ${MD_LOG2} was ${MD_LOG1}"
     error_exit "md_monitor did not pick up changes after $sleeptime seconds"
 fi
 if ! wait_for_sync ${MD_NUM} ; then
@@ -114,6 +123,7 @@ for devno in $DEVNOS_RIGHT ; do
     if ! echo 0 > /sys/bus/ccw/devices/$devno/online ; then
 	error_exit "Cannot set device $devno offline"
     fi
+    push_recovery_fn "online_dasd $devno"
 done
 echo "Write test file 3 ..."
 dd if=/dev/zero of=/mnt/testfile3 bs=4096 count=1024
@@ -121,26 +131,28 @@ sleep 5
 mdadm --detail /dev/${MD_NUM}
 ls -l /mnt
 echo "Restart second half ..."
-for devno in $DEVNOS_RIGHT ; do
-    if ! echo 1 > /sys/bus/ccw/devices/$devno/online ; then
-	error_exit "Cannot set device $devno online"
+while true ; do
+    if ! pop_recovery_fn ; then
+	break;
     fi
 done
+
 echo "Wait for md_monitor to pick up changes"
 sleeptime=0
-MD_LOG3="/tmp/monitor_${MD_NAME}_step3.log"
 while [ $sleeptime -lt $MONITOR_TIMEOUT ] ; do
-    md_monitor -c"ArrayStatus:/dev/${MD_NUM}" | sort -k3,3 > ${MD_LOG3}
-    if diff -pu "${MD_LOG1}" "${MD_LOG3}" > /dev/null ; then
+    MD_LOG3=$(md_monitor -c"MonitorStatus:/dev/${MD_NUM}")
+    if [ "${MD_LOG1}" = "${MD_LOG3}" ] ; then
 	break;
     fi
     (( sleeptime ++ )) || true
     sleep 1
 done
 if [ $sleeptime -ge $MONITOR_TIMEOUT ] ; then
+    echo "Monitor status does not match: is ${MD_LOG3} was ${MD_LOG1}"
     error_exit "md_monitor did not pick up changes after $sleeptime seconds"
 fi
 if ! wait_for_sync ${MD_NUM} ; then
+    md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
     error_exit "Failed to activate second half"
 fi
 mdadm --detail /dev/${MD_NUM}
