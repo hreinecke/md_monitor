@@ -10,8 +10,6 @@ set -o errexit
 MD_NUM="md1"
 MD_NAME="testcase9"
 
-logger "Monitor Testcase 9: Disk replacement"
-
 stop_md $MD_NUM
 
 activate_dasds
@@ -20,6 +18,8 @@ clear_metadata
 
 ulimit -c unlimited
 start_md ${MD_NUM} 6
+
+logger "${MD_NAME}: Disk replacement"
 
 echo "Create filesystem ..."
 if ! mkfs.ext3 /dev/${MD_NUM} ; then
@@ -99,6 +99,8 @@ fi
 # The array configuration is different from the original one,
 # so we cannot compare the final and the initial state
 unset START_LOG
+
+logger "${MD_NAME}: success"
 
 echo "Umount filesystem ..."
 umount /mnt
