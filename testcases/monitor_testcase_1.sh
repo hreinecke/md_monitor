@@ -10,8 +10,6 @@ set -o errexit
 MD_NUM="md1"
 MD_NAME="testcase1"
 
-logger "Monitor Testcase 1: Array startup/shutdown"
-
 stop_md $MD_NUM
 
 activate_dasds
@@ -20,6 +18,8 @@ clear_metadata
 
 ulimit -c unlimited
 start_md ${MD_NUM}
+
+logger "${MD_NAME}: Array startup/shutdown"
 
 echo "Create filesystem ..."
 if ! mkfs.ext3 /dev/${MD_NUM} ; then
@@ -69,6 +69,8 @@ ls -l /mnt | tee ${MD_LOG4}
 if ! diff ${MD_LOG2} ${MD_LOG4} ; then
     error_exit "Filesystem contents differ"
 fi
+
+logger "${MD_NAME}: success"
 
 echo "Umount filesystem ..."
 umount /mnt

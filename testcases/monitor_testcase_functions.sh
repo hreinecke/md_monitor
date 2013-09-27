@@ -72,6 +72,7 @@ function start_md() {
     rcsyslog restart
     MONITOR_PID=$(/sbin/md_monitor -y -p 7 -d -s)
     trapcmd="[ \$? -ne 0 ] && echo TEST FAILED while executing \'\$BASH_COMMAND\', EXITING"
+    trapcmd="$trapcmd ; logger ${MD_NAME}: failed"
     trapcmd="$trapcmd ; reset_devices ; stop_iotest"
     if [ -z "$MONITOR_PID" ] ; then
 	error_exit "Failed to start md_monitor"
