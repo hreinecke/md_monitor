@@ -2154,11 +2154,6 @@ static int display_md(struct md_monitor *md_dev, char *buf)
 		enum md_rdev_status md_status;
 
 		md_status = md_rdev_check_state(dev);
-		if (md_status == UNKNOWN) {
-			/* array has been stopped */
-			bufsize = -1;
-			break;
-		}
 		pthread_mutex_lock(&dev->lock);
 		md_rdev_update_state(dev, md_status);
 		pthread_mutex_unlock(&dev->lock);
