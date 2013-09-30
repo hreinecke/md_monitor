@@ -74,7 +74,7 @@ logger "Set chpid $CHPID_LEFT to 'standby'"
 if chchp -c 0 $CHPID_LEFT ; then
     push_recovery_fn "chp_configure ${CHPID_LEFT}"
 else
-    echo "Cannot set chpid $CHPID_LEFT to 'standby'"
+    echo "Cannot set chpid $CHPID_LEFT to 'standby', ignoring"
 fi
 
 echo "$(date) Ok. Waiting for MD to pick up changes ..."
@@ -162,7 +162,7 @@ logger "Set chpid $CHPID_RIGHT to 'standby'"
 if chchp -c 0 $CHPID_RIGHT ; then
     push_recovery_fn "chp_configure ${CHPID_RIGHT}"
 else
-    echo "Cannot set chpid $CHPID_RIGHT to 'standby'"
+    echo "Cannot set chpid $CHPID_RIGHT to 'standby', ignoring"
 fi
 
 echo "Ok. Waiting for MD to pick up changes ..."
