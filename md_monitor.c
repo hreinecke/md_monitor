@@ -97,6 +97,7 @@ struct cli_monitor {
 };
 
 struct md_monitor {
+	char dev_name[64];
 	struct list_head entry;
 	struct list_head children;
 	pthread_mutex_t device_lock;
@@ -265,7 +266,7 @@ static int reset_component(struct device_monitor *);
 static void fail_mirror(struct device_monitor *, enum md_rdev_status);
 static void reset_mirror(struct device_monitor *);
 static void discover_md_components(struct md_monitor *md);
-static void remove_md_component(const char *mdname,
+static void remove_md_component(struct md_monitor *md_dev,
 				struct device_monitor *dev);
 static int dasd_set_attribute(struct device_monitor *dev, const char *attr,
 			      int value);
@@ -306,17 +307,13 @@ static struct md_monitor *lookup_md(struct udev_device *mddev, int remove)
 {
 	const char *mdname = udev_device_get_sysname(mddev);
 	struct md_monitor *tmp, *md = NULL;
-	const char *tmpname;
 
 	if (!mdname)
 		return NULL;
 
 	pthread_mutex_lock(&md_lock);
 	list_for_each_entry(tmp, &md_list, entry) {
-		tmpname = NULL;
-		if (tmp->device)
-			tmpname = udev_device_get_sysname(tmp->device);
-		if (tmpname && !strcmp(tmpname, mdname)) {
+		if (!strcmp(tmp->dev_name, mdname)) {
 			md = tmp;
 			break;
 		}
@@ -330,7 +327,6 @@ static struct md_monitor *lookup_md(struct udev_device *mddev, int remove)
 static struct md_monitor *lookup_md_alias(const char *mdpath)
 {
 	struct md_monitor *tmp, *md = NULL;
-	const char *tmpname;
 	const char *mdname;
 
 	if (!mdpath || strlen(mdpath) == 0)
@@ -344,14 +340,7 @@ static struct md_monitor *lookup_md_alias(const char *mdpath)
 
 	pthread_mutex_lock(&md_lock);
 	list_for_each_entry(tmp, &md_list, entry) {
-		tmpname = udev_device_get_property_value(tmp->device,
-							 "MD_DEVNAME");
-		if (tmpname && !strcmp(tmpname, mdname)) {
-			md = tmp;
-			break;
-		}
-		tmpname = udev_device_get_sysname(tmp->device);
-		if (tmpname && !strcmp(tmpname, mdname)) {
+		if (!strcmp(tmp->dev_name, mdname)) {
 			md = tmp;
 			break;
 		}
@@ -363,13 +352,11 @@ static struct md_monitor *lookup_md_alias(const char *mdpath)
 static struct device_monitor * lookup_md_component(struct md_monitor *md_dev,
 						   const char *devname)
 {
-	const char *mdname;
 	struct device_monitor *tmp, *found = NULL;
 	int lookup_symlinks = 0;
 
 	if (!md_dev)
 		return NULL;
-	mdname = udev_device_get_sysname(md_dev->device);
 
 	if (!devname)
 		return NULL;
@@ -394,7 +381,7 @@ static struct device_monitor * lookup_md_component(struct md_monitor *md_dev,
 				ptr = strrchr(tmpname, '/');
 				if (!ptr) {
 					info("%s: invalid symlink %s",
-					     mdname, tmpname);
+					     md_dev->dev_name, tmpname);
 					continue;
 				}
 				ptr++;
@@ -420,19 +407,23 @@ static struct md_monitor *lookup_md_new(struct udev_device *md_dev)
 {
 	const char *mdname = udev_device_get_sysname(md_dev);
 	struct md_monitor *tmp, *md = NULL;
-	const char *tmpname;
 
 	pthread_mutex_lock(&md_lock);
 	list_for_each_entry(tmp, &md_list, entry) {
-		tmpname = udev_device_get_sysname(tmp->device);
-		if (tmpname && !strcmp(tmpname, mdname)) {
+		if (!strcmp(tmp->dev_name, mdname)) {
 			md = tmp;
 			break;
 		}
 	}
 	if (!md) {
 		md = malloc(sizeof(struct md_monitor));
-		memset(md, 0, sizeof(struct md_monitor));
+		if (md)
+			memset(md, 0, sizeof(struct md_monitor));
+		else
+			goto out_unlock;
+		strcpy(md->dev_name, mdname);
+	}
+	if (!md->device) {
 		md->device = md_dev;
 		md->raid_disks = -1;
 		udev_device_ref(md_dev);
@@ -442,6 +433,7 @@ static struct md_monitor *lookup_md_new(struct udev_device *md_dev)
 		pthread_mutex_init(&md->device_lock, NULL);
 		list_add(&md->entry, &md_list);
 	}
+out_unlock:
 	pthread_mutex_unlock(&md_lock);
 	return md;
 }
@@ -597,8 +589,7 @@ static void detach_dasd(struct udev_device *dev)
 
 			md_dev = lookup_md(found->parent, 0);
 			if (md_dev) {
-				const char *mdname = udev_device_get_sysname(md_dev->device);
-				remove_md_component(mdname, found);
+				remove_md_component(md_dev, found);
 				remove_component(found);
 			}
 		}
@@ -635,28 +626,27 @@ static void discover_dasd(struct udev *udev)
 static void md_rdev_update_index(struct md_monitor *md,
 				 struct device_monitor *dev)
 {
-	const char *mdname = udev_device_get_sysname(md->device);
 	int ioctl_fd, i, offset = 0;
 	mdu_disk_info_t info;
 	char mdpath[256];
 	dev_t mon_devt, tmp_devt;
 
-	if (!mdname) {
+	if (!md) {
 		dbg("No MD array found");
 		return;
 	}
 
-	sprintf(mdpath, "/dev/%s", mdname);
+	sprintf(mdpath, "/dev/%s", md->dev_name);
 	ioctl_fd = open(mdpath, O_RDWR|O_NONBLOCK);
 	if (ioctl_fd < 0) {
-		warn("%s: Couldn't open %s: %m", mdname, mdpath);
+		warn("%s: Couldn't open %s: %m", md->dev_name, mdpath);
 		return;
 	}
 	for (i = 0; i < 4096; i++) {
 		info.number = i;
 		if (ioctl(ioctl_fd, GET_DISK_INFO, &info) < 0) {
 			warn("%s: ioctl GET_DISK_INFO for disk %d failed: %m",
-			     mdname, i);
+			     md->dev_name, i);
 			continue;
 		}
 		if (info.major == 0 && info.minor == 0)
@@ -688,7 +678,7 @@ static void md_rdev_update_index(struct md_monitor *md,
 			dev->md_index = i;
 			if (info.raid_disk > -1)
 				dev->md_slot = info.raid_disk;
-			info("%s: update index on %s (%d/%d)", mdname,
+			info("%s: update index on %s (%d/%d)", md->dev_name,
 			     dev->md_name, dev->md_index, dev->md_slot);
 			monitor_dasd(dev);
 			break;
@@ -1342,10 +1332,11 @@ static void remove_component(struct device_monitor *dev)
 	info("%s: Remove component (%d/%d)",
 	     dev->dev_name, dev->md_index, dev->md_slot);
 
-	pthread_mutex_lock(&dev->lock);
 	list_del_init(&dev->siblings);
 
-	udev_device_unref(dev->parent);
+	pthread_mutex_lock(&dev->lock);
+	if (dev->parent)
+		udev_device_unref(dev->parent);
 	dev->parent = NULL;
 	pthread_mutex_unlock(&dev->lock);
 }
@@ -1678,7 +1669,7 @@ static void sync_md_component(struct md_monitor *md_dev,
 	monitor_dasd(dev);
 }
 
-static void remove_md_component(const char *md_name,
+static void remove_md_component(struct md_monitor *md_dev,
 				struct device_monitor *dev)
 {
 	pthread_t thread;
@@ -1688,7 +1679,7 @@ static void remove_md_component(const char *md_name,
 		warn("%s: mdadm call still pending", dev->dev_name);
 	}
 	info("%s: setting '%s' to REMOVED",
-	     md_name, dev->dev_name);
+	     md_dev->dev_name, dev->dev_name);
 	dev->md_status = REMOVED;
 	thread = dev->thread;
 	if (dev->running && thread) {
@@ -1829,7 +1820,7 @@ static void discover_md_components(struct md_monitor *md)
 		list_for_each_entry_safe(found, tmp, &update_list, siblings) {
 			info("%s: Remove stale device",
 			     found->dev_name);
-			remove_md_component(mdname, found);
+			remove_md_component(md, found);
 			remove_component(found);
 		}
 		pthread_mutex_lock(&md->status_lock);
@@ -1950,7 +1941,6 @@ static void reset_md(struct md_monitor *md_dev)
 
 static void remove_md(struct md_monitor *md_dev)
 {
-	const char *mdname = udev_device_get_sysname(md_dev->device);
 	struct udev_device *device = md_dev->device;
 	struct device_monitor *dev, *tmp;
 	struct list_head remove_list;
@@ -1961,60 +1951,59 @@ static void remove_md(struct md_monitor *md_dev)
 	pthread_mutex_unlock(&md_dev->device_lock);
 
 	list_for_each_entry_safe(dev, tmp, &remove_list, siblings) {
-		info("%s: Remove MD component device",
-		     dev->dev_name);
-		remove_md_component(mdname, dev);
+		info("%s: Remove MD component device %s",
+		     md_dev->dev_name, dev->dev_name);
+		remove_md_component(md_dev, dev);
 		remove_component(dev);
 	}
 
 	/* Synchronize with other threads */
 	pthread_mutex_lock(&md_dev->status_lock);
 	md_dev->device = NULL;
-	info("%s: Stop monitoring",
-	     udev_device_get_devpath(device));
-	udev_device_unref(device);
+	info("%s: Stop monitoring", md_dev->dev_name);
+	if (device)
+		udev_device_unref(device);
 	pthread_mutex_unlock(&md_dev->status_lock);
 	pthread_mutex_destroy(&md_dev->status_lock);
 	pthread_mutex_destroy(&md_dev->device_lock);
 	free(md_dev);
 }
 
-static int check_md(struct udev_device *md_dev, mdu_array_info_t *info)
+static int check_md(struct md_monitor *md_dev, mdu_array_info_t *info)
 {
 	char devpath[256];
-	const char *devname;
 	int ioctl_fd, rc;
 
-	devname = udev_device_get_sysname(md_dev);
-	if (!devname || !strlen(devname))
+	if (!md_dev)
 		return ENODEV;
 
-	sprintf(devpath, "/dev/%s", devname);
+	sprintf(devpath, "/dev/%s", md_dev->dev_name);
 	ioctl_fd = open(devpath, O_RDWR|O_NONBLOCK);
 	if (ioctl_fd >= 0) {
 		if (ioctl(ioctl_fd, GET_ARRAY_INFO, info) < 0) {
 			rc = errno;
 			if (rc == ENODEV)
-				info("%s: array stopped, ignoring", devname);
+				info("%s: array stopped, ignoring",
+				     md_dev->dev_name);
 			else
 				err("%s: ioctl GET_ARRAY_INFO failed: %m",
-				    devname);
+				    md_dev->dev_name);
 			info->raid_disks = 0;
 		} else if (info->raid_disks == 0) {
-			warn("%s: no RAID disks, ignoring", devname);
+			warn("%s: no RAID disks, ignoring", md_dev->dev_name);
 			rc = EAGAIN;
 		}
 		close(ioctl_fd);
 	} else {
 		rc = errno;
-		err("%s: could not open %s: %m", devname, devpath);
+		err("%s: could not open %s: %m", md_dev->dev_name, devpath);
 		info->raid_disks = 0;
 	}
 	if (info->raid_disks < 1)
 		return rc;
 
 	if (info->level != 10) {
-		err("%s: not a RAID10 array", devname);
+		err("%s: not a RAID10 array", md_dev->dev_name);
 		return EINVAL;
 	}
 	return 0;
@@ -2022,26 +2011,27 @@ static int check_md(struct udev_device *md_dev, mdu_array_info_t *info)
 
 static int monitor_md(struct udev_device *md_dev)
 {
-	const char *devname;
 	int rc;
 	mdu_array_info_t info;
 	struct md_monitor *found = NULL;
 
+	found = lookup_md_new(md_dev);
+	if (!found)
+		return ENOMEM;
+
 	memset(&info, 0, sizeof(mdu_array_info_t));
-	rc = check_md(md_dev, &info);
+	rc = check_md(found, &info);
 	if (rc)
 		return rc;
 
-	devname = udev_device_get_sysname(md_dev);
-	found = lookup_md_new(md_dev);
 	if (found->raid_disks < 0) {
-		warn("%s: Start monitoring %s", devname,
+		warn("%s: Start monitoring %s", found->dev_name,
 		       udev_device_get_devpath(md_dev));
 		found->raid_disks = info.raid_disks;
 		found->layout = info.layout;
 		discover_md_components(found);
 	} else {
-		warn("%s: Already monitoring %s", devname,
+		warn("%s: Already monitoring %s", found->dev_name,
 		       udev_device_get_devpath(found->device));
 	}
 	return 0;
@@ -2088,7 +2078,7 @@ static int display_md_status(struct md_monitor *md_dev, char *buf, int buflen)
 
 	if (max_slot >= buflen) {
 		warn("%s: CLI buffer too small, min %d",
-		     udev_device_get_sysname(md_dev->device), max_slot);
+		     md_dev->dev_name, max_slot);
 		max_slot = buflen;
 	}
 	memset(buf, '.', max_slot);
@@ -2106,7 +2096,7 @@ static int display_md_status(struct md_monitor *md_dev, char *buf, int buflen)
 	}
 	pthread_mutex_unlock(&md_dev->device_lock);
 
-	info("%s: md status %s", udev_device_get_sysname(md_dev->device), buf);
+	info("%s: md status %s", md_dev->dev_name, buf);
 	return max_slot;
 }
 
@@ -2114,20 +2104,15 @@ static int display_io_status(struct md_monitor *md_dev, char *buf, int buflen)
 {
 	struct device_monitor *dev;
 	int slot, max_slot = md_dev->raid_disks;
-	int len = 0, rc;
+	int len = 0;
 	char status;
 
 	if (max_slot >= buflen) {
 		warn("%s: CLI buffer too small, min %d",
-		     udev_device_get_sysname(md_dev->device), max_slot);
+		     md_dev->dev_name, max_slot);
 		max_slot = buflen;
 	}
 	memset(buf, '.', max_slot);
-	pthread_mutex_lock(&md_dev->status_lock);
-	rc = md_dev->device ? 0 : -ENODEV;
-	pthread_mutex_unlock(&md_dev->status_lock);
-	if (rc)
-		return rc;
 
 	pthread_mutex_lock(&md_dev->device_lock);
 	list_for_each_entry(dev, &md_dev->children, siblings) {
@@ -2143,28 +2128,19 @@ static int display_io_status(struct md_monitor *md_dev, char *buf, int buflen)
 	}
 	pthread_mutex_unlock(&md_dev->device_lock);
 
-	info("%s: io status %s", udev_device_get_sysname(md_dev->device), buf);
+	info("%s: io status %s", md_dev->dev_name, buf);
 	return max_slot;
 }
 
 static int display_md(struct md_monitor *md_dev, char *buf)
 {
 	struct device_monitor *dev;
-	struct udev_device *md_udev = NULL;
 	mdu_array_info_t info;
 	char status[4096];
 	int bufsize = 0, len = 0;
 	int rc;
 
-	pthread_mutex_lock(&md_dev->status_lock);
-	if (md_dev->device)
-		md_udev = udev_device_ref(md_dev->device);
-	pthread_mutex_unlock(&md_dev->status_lock);
-	if (!md_udev)
-		return -ENODEV;
-
-	rc = check_md(md_udev, &info);
-	udev_device_unref(md_udev);
+	rc = check_md(md_dev, &info);
 	if (rc) {
 		return -rc;
 	}
@@ -2183,14 +2159,13 @@ static int display_md(struct md_monitor *md_dev, char *buf)
 		md_rdev_update_state(dev, md_status);
 		pthread_mutex_unlock(&dev->lock);
 		len = sprintf(status, "%s: dev %s slot %d/%d status %s %s\n",
-			       udev_device_get_sysname(md_dev->device),
-			       dev->dev_name, dev->md_slot, md_dev->raid_disks,
-			       md_rdev_print_state(dev->md_status),
-			       dasd_io_print_state(dev->io_status));
+			      md_dev->dev_name, dev->dev_name,
+			      dev->md_slot, md_dev->raid_disks,
+			      md_rdev_print_state(dev->md_status),
+			      dasd_io_print_state(dev->io_status));
 		if ((bufsize + len) > CLI_BUFLEN) {
 			warn("%s: CLI buffer too small, min %d",
-			     udev_device_get_sysname(md_dev->device),
-			     bufsize + len);
+			     md_dev->dev_name, bufsize + len);
 			memset(buf, 0, CLI_BUFLEN);
 			len = -ENOMEM;
 			break;
@@ -2300,7 +2275,6 @@ static void *mdadm_exec_thread (void *ctx)
 	int rc;
 	struct list_head active_list;
 	struct md_monitor *md_dev, *tmp;
-	const char *md_name = NULL;
 
 	while (thr->running) {
 		INIT_LIST_HEAD(&active_list);
@@ -2336,20 +2310,14 @@ static void *mdadm_exec_thread (void *ctx)
 		list_for_each_entry_safe(md_dev, tmp, &active_list, pending) {
 			int do_fail = 0;
 
-			pthread_mutex_lock(&md_dev->status_lock);
-			if (!md_dev->device) {
-				pthread_mutex_unlock(&md_dev->status_lock);
-				continue;
-			}
-			md_name = udev_device_get_sysname(md_dev->device);
-
 			if (gettimeofday(&start_time, NULL) < 0)
 				start_time.tv_sec = 0;
 
 			list_del_init(&md_dev->pending);
 			if (md_dev->pending_status == UNKNOWN) {
 				pthread_mutex_unlock(&md_dev->status_lock);
-				dbg("%s: task already completed", md_name);
+				dbg("%s: task already completed",
+				    md_dev->dev_name);
 			} else if (md_dev->pending_status != IN_SYNC) {
 				pthread_mutex_unlock(&md_dev->status_lock);
 				do_fail = 1;
@@ -2363,11 +2331,11 @@ static void *mdadm_exec_thread (void *ctx)
 			    gettimeofday(&end_time, NULL) == 0) {
 				timersub(&end_time, &start_time, &diff);
 				info("%s: all devices %s after "
-				     "%lu.%06lu secs", md_name,
+				     "%lu.%06lu secs", md_dev->dev_name,
 				     do_fail ? "failed" : "reset",
 				     diff.tv_sec, diff.tv_usec);
 			} else {
-				info("%s: all devices %s", md_name,
+				info("%s: all devices %s", md_dev->dev_name,
 				     do_fail ? "failed" : "reset");
 			}
 		}
@@ -2526,8 +2494,7 @@ void *cli_monitor_thread(void *ctx)
 			goto send_msg;
 		}
 		if (!strcmp(event, "RebuildStarted")) {
-			info("%s: Rebuild started",
-			     udev_device_get_sysname(md_dev->device));
+			info("%s: Rebuild started", md_dev->dev_name);
 			md_dev->in_recovery = 1;
 			discover_md_components(md_dev);
 			buf[0] = 0;
@@ -2535,8 +2502,7 @@ void *cli_monitor_thread(void *ctx)
 			goto send_msg;
 		}
 		if (!strcmp(event, "RebuildFinished")) {
-			info("%s: Rebuild finished",
-			     udev_device_get_sysname(md_dev->device));
+			info("%s: Rebuild finished", md_dev->dev_name);
 			md_dev->in_recovery = 0;
 			buf[0] = 0;
 			iov.iov_len = 0;
@@ -2553,9 +2519,7 @@ void *cli_monitor_thread(void *ctx)
 			pthread_mutex_lock(&md_lock);
 			md_dev = NULL;
 			list_for_each_entry(tmp, &md_list, entry) {
-				const char *tmpname =
-					udev_device_get_sysname(tmp->device);
-				if (tmpname && !strcmp(tmpname, mdstr)) {
+				if (!strcmp(tmp->dev_name, mdstr)) {
 					md_dev = tmp;
 					break;
 				}
@@ -2564,7 +2528,7 @@ void *cli_monitor_thread(void *ctx)
 				list_del_init(&md_dev->entry);
 			pthread_mutex_unlock(&md_lock);
 			if (md_dev) {
-				info("%s: array stopped", mdstr);
+				info("%s: array stopped", md_dev->dev_name);
 				remove_md(md_dev);
 			} else {
 				info("%s: array already stopped, ignoring",
@@ -2638,7 +2602,7 @@ void *cli_monitor_thread(void *ctx)
 			}
 		} else if (!strcmp(event, "Remove")) {
 			if (dev) {
-				remove_md_component(mdstr, dev);
+				remove_md_component(md_dev, dev);
 				remove_component(dev);
 				buf[0] = 0;
 				iov.iov_len = 0;
