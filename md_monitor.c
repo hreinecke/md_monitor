@@ -1576,7 +1576,8 @@ static void reset_mirror(struct device_monitor *dev)
 		     dasd_io_print_state(tmp->io_status));
 		if (tmp->md_status == RECOVERY)
 			continue;
-		if (tmp->io_status == IO_UNKNOWN)
+		if (tmp->io_status == IO_UNKNOWN ||
+		    tmp->io_status == IO_FAILED)
 			continue;
 		if (this_side != side)
 			ready_devices++;
