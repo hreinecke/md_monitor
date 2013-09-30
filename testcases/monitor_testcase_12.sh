@@ -56,7 +56,7 @@ echo "$(date) Run I/O test"
 run_iotest /mnt;
 
 MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
-md_monitor -c"ArrayStatus:/dev/${MD_NUM}" > ${MD_LOG1}
+md_monitor -c"ArrayStatus:/dev/${MD_NUM}" | tee ${MD_LOG1}
 
 for devno in ${DEVNOS_LEFT} ; do
     echo "$(date) Waiting for $SLEEPTIME seconds ..."
@@ -86,10 +86,10 @@ if ! wait_for_sync ${MD_NUM} ; then
 fi
 echo "$(date) mirror synchronized"
 MD_LOG2="/tmp/monitor_${MD_NAME}_step2.log"
-md_monitor -c"ArrayStatus:/dev/${MD_NUM}" > ${MD_LOG2}
+md_monitor -c"ArrayStatus:/dev/${MD_NUM}" | tee ${MD_LOG2}
 if ! diff -pu ${MD_LOG1} ${MD_LOG2} ; then
     stop_iotest
-    error_exit "MD monitor reported array failure"
+    error_exit "inconsistent md_monitor status after detaching left half"
 fi
 
 for devno in ${DEVNOS_RIGHT} ; do
@@ -114,13 +114,16 @@ done
 
 echo "$(date) Wait for sync"
 if ! wait_for_sync ${MD_NUM} ; then
+    md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
+    stop_iotest
     error_exit "Failed to synchronize array"
 fi
 echo "$(date) sync finished"
 MD_LOG3="/tmp/monitor_${MD_NAME}_step3.log"
-md_monitor -c"ArrayStatus:/dev/${MD_NUM}" > ${MD_LOG3}
+md_monitor -c"ArrayStatus:/dev/${MD_NUM}" | tee ${MD_LOG3}
 if ! diff -pu ${MD_LOG1} ${MD_LOG3} ; then
-    error_exit "MD monitor reported array failure"
+    stop_iotest
+    error_exit "inconsistent md monitor status after detaching right half"
 fi
 
 logger "${MD_NAME}: success"
