@@ -590,6 +590,9 @@ static void detach_dasd(struct udev_device *dev)
 			md_dev = lookup_md(found->parent, 0);
 			if (md_dev) {
 				remove_md_component(md_dev, found);
+				pthread_mutex_lock(&md_dev->device_lock);
+				list_del_init(&found->siblings);
+				pthread_mutex_unlock(&md_dev->device_lock);
 				remove_component(found);
 			}
 		}
@@ -1332,8 +1335,6 @@ static void remove_component(struct device_monitor *dev)
 	info("%s: Remove component (%d/%d)",
 	     dev->dev_name, dev->md_index, dev->md_slot);
 
-	list_del_init(&dev->siblings);
-
 	pthread_mutex_lock(&dev->lock);
 	if (dev->parent)
 		udev_device_unref(dev->parent);
@@ -1821,6 +1822,7 @@ static void discover_md_components(struct md_monitor *md)
 			info("%s: Remove stale device",
 			     found->dev_name);
 			remove_md_component(md, found);
+			list_del_init(&found->siblings);
 			remove_component(found);
 		}
 		pthread_mutex_lock(&md->status_lock);
@@ -1954,6 +1956,7 @@ static void remove_md(struct md_monitor *md_dev)
 		info("%s: Remove MD component device %s",
 		     md_dev->dev_name, dev->dev_name);
 		remove_md_component(md_dev, dev);
+		list_del_init(&dev->siblings);
 		remove_component(dev);
 	}
 
@@ -2603,6 +2606,9 @@ void *cli_monitor_thread(void *ctx)
 		} else if (!strcmp(event, "Remove")) {
 			if (dev) {
 				remove_md_component(md_dev, dev);
+				pthread_mutex_lock(&md_dev->device_lock);
+				list_del_init(&dev->siblings);
+				pthread_mutex_unlock(&md_dev->device_lock);
 				remove_component(dev);
 				buf[0] = 0;
 				iov.iov_len = 0;
