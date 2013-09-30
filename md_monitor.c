@@ -122,6 +122,7 @@ struct device_monitor {
 	char md_name[64];
 	pthread_t thread;
 	pthread_mutex_t lock;
+	pthread_cond_t io_cond;
 	enum md_rdev_status md_status;
 	enum dasd_io_status io_status;
 	int ref;
@@ -462,6 +463,7 @@ static void dasd_monitor_put(struct device_monitor *dev)
 		dev->device = NULL;
 		pthread_mutex_unlock(&dev->lock);
 		pthread_mutex_destroy(&dev->lock);
+		pthread_cond_destroy(&dev->io_cond);
 		free(dev);
 		return;
 	}
@@ -485,6 +487,7 @@ static struct device_monitor *allocate_dasd(struct udev_device *dasd_dev)
 	dev->md_index = -1;
 	dev->io_status = IO_UNKNOWN;
 	pthread_mutex_init(&dev->lock, NULL);
+	pthread_cond_init(&dev->io_cond, NULL);
 	INIT_LIST_HEAD(&dev->siblings);
 	udev_device_ref(dev->device);
 	strcpy(dev->dev_name, udev_device_get_sysname(dasd_dev));
@@ -1091,6 +1094,7 @@ void dasd_monitor_cleanup(void *data)
 	pthread_mutex_lock(&dev->lock);
 	dev->running = 0;
 	dev->thread = 0;
+	pthread_cond_signal(&dev->io_cond);
 	pthread_mutex_unlock(&dev->lock);
 	dasd_monitor_put(dev);
 }
@@ -1167,6 +1171,7 @@ void *dasd_monitor_thread (void *ctx)
 			aio_timeout = monitor_timeout;
 			pthread_mutex_lock(&dev->lock);
 			dev->io_status = io_status;
+			pthread_cond_signal(&dev->io_cond);
 			continue;
 		}
 		if (io_status == IO_UNKNOWN) {
@@ -1180,6 +1185,7 @@ void *dasd_monitor_thread (void *ctx)
 			continue;
 		}
 		dev->io_status = io_status;
+		pthread_cond_signal(&dev->io_cond);
 		pthread_mutex_unlock(&dev->lock);
 		if (io_status != IO_OK) {
 			switch (new_status) {
@@ -2093,7 +2099,9 @@ static int display_md_status(struct md_monitor *md_dev, char *buf, int buflen)
 			continue;
 		if (slot >= max_slot)
 			continue;
+		pthread_mutex_lock(&dev->lock);
 		status = md_rdev_print_state_short(dev->md_status);
+		pthread_mutex_unlock(&dev->lock);
 		buf[slot] = status;
 		if (slot + 1> len)
 			len = slot + 1;
@@ -2125,7 +2133,13 @@ static int display_io_status(struct md_monitor *md_dev, char *buf, int buflen)
 			continue;
 		if (slot >= max_slot)
 			continue;
+		pthread_mutex_lock(&dev->lock);
+		while (dev->ioctx && dev->io_status == IO_UNKNOWN)
+			pthread_cond_wait(&dev->io_cond, &dev->lock);
+
 		status = dasd_io_print_state_short(dev->io_status);
+		pthread_mutex_unlock(&dev->lock);
+
 		buf[slot] = status;
 		if (slot + 1> len)
 			len = slot + 1;
@@ -2156,6 +2170,9 @@ static int display_md(struct md_monitor *md_dev, char *buf)
 		md_status = md_rdev_check_state(dev);
 		pthread_mutex_lock(&dev->lock);
 		md_rdev_update_state(dev, md_status);
+		while (dev->ioctx && dev->io_status == IO_UNKNOWN)
+			pthread_cond_wait(&dev->io_cond, &dev->lock);
+
 		pthread_mutex_unlock(&dev->lock);
 		len = sprintf(status, "%s: dev %s slot %d/%d status %s %s\n",
 			      md_dev->dev_name, dev->dev_name,
