@@ -1641,9 +1641,10 @@ static void fail_md_component(struct md_monitor *md_dev,
 		warn("%s: device status %s, ignore state change",
 		     dev->dev_name, md_rdev_print_state(md_status));
 		return;
-	}
+	} else if (md_status != TIMEOUT)
+		md_status = FAULTY;
 	pthread_mutex_lock(&dev->lock);
-	new_status = md_rdev_update_state(dev, FAULTY);
+	new_status = md_rdev_update_state(dev, md_status);
 	if (new_status == TIMEOUT)
 		dev->io_status = IO_TIMEOUT;
 	else if (new_status == FAULTY)
