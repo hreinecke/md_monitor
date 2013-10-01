@@ -62,7 +62,6 @@ void usage(void)
 	    "  --sysfs=<devpath>              use sysfs path <devpath>\n"
 	    "  --log-priority=<prio>          set logging priority to <prio>\n"
 	    "  --verbose                      increase logging priority\n"
-	    "  --version                      print setdasd version number\n"
 	    "  --help\n");
 }
 
@@ -85,7 +84,6 @@ int main(int argc, char **argv)
 		{ "log-priority", required_argument, NULL, 'p' },
 		{ "verbose", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
-		{ "version", no_argument, NULL, 'V' },
 		{}
 	};
 
@@ -94,7 +92,7 @@ int main(int argc, char **argv)
 		exit(1);
 
 	while (1) {
-		option = getopt_long(argc, argv, "d:p:q:s:t:vhV",
+		option = getopt_long(argc, argv, "d:p:q:s:t:vh",
 				     options, NULL);
 		if (option == -1) {
 			break;

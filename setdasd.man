@@ -12,7 +12,6 @@ setdasd \- set or unset DASD device flags
 [\fI-s \fBdevpath\fR|\fI--sysfs=\fBdevpath\fR]
 [\fI-p \fBprio\fR|\fI--log-priority=\fBprio\fR]
 [\fI-v\fR|\fI--verbose\fR]
-[\fI-V\fR|\fI--version\fR]
 [\fI-h\fR|\fI--help\fR]
 .SH DESCRIPTION
 .PP
@@ -38,16 +37,13 @@ Use the device specified by device node \fBdevnode\fR.
 Use the device specified by sysfs path \fBdevpath\fR.
 .TP
 \fI-h\fR, \fI--help\fR
-Display md_monitor usage information.
+Display setdasd usage information.
 .TP
 \fI-p \fBprio\fR, \fI--log-priority=\fBprio\fR
 Set logging priority to \fBprio\fR.
 .TP
 \fI-v\fR, \fI--verbose\fR
 Increase logging priority
-.TP
-\fI-V\fR, \fI--version\fR
-Display setdasd version information.
 
 .SH SEE ALSO
 .IR
