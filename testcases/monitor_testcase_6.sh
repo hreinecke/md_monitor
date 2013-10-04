@@ -10,7 +10,7 @@ set -o errexit
 MD_NUM="md1"
 MD_NAME="testcase6"
 IO_TIMEOUT=10
-MONITOR_TIMEOUT=60
+MONITOR_TIMEOUT=15
 
 stop_md $MD_NUM
 
