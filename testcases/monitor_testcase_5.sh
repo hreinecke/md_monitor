@@ -11,8 +11,8 @@ MD_NUM="md1"
 MD_NAME="testcase5"
 MONITOR_TIMEOUT=60
 
-CHPID_LEFT="0.4b"
-CHPID_RIGHT="0.4e"
+CHPID_LEFT="0.13"
+CHPID_RIGHT="0.1b"
 
 detach_other_half=1
 
