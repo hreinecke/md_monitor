@@ -1154,8 +1154,10 @@ void *dasd_monitor_thread (void *ctx)
 			pthread_mutex_lock(&dev->lock);
 			new_status = md_rdev_update_state(dev, md_status);
 		} else {
+			pthread_mutex_lock(&dev->lock);
 			new_status = TIMEOUT;
 		}
+		/* dev->lock held */
 		if (io_status == IO_PENDING) {
 			/*
 			 * io_getevents or sigtimedwait
@@ -1174,6 +1176,7 @@ void *dasd_monitor_thread (void *ctx)
 			pthread_cond_signal(&dev->io_cond);
 			continue;
 		}
+		/* dev->lock held */
 		if (io_status == IO_UNKNOWN) {
 			/*
 			 * First round, we cannot really make any sane
