@@ -1986,7 +1986,7 @@ static void remove_md(struct md_monitor *md_dev)
 static int check_md(struct md_monitor *md_dev, mdu_array_info_t *info)
 {
 	char devpath[256];
-	int ioctl_fd, rc;
+	int ioctl_fd, rc = 0;
 
 	if (!md_dev)
 		return ENODEV;
