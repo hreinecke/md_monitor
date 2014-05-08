@@ -2730,6 +2730,7 @@ int cli_command(char *cmd)
 		strlen(local.sun_path + 1) + 1;
 	if (bind(cli_sock, (struct sockaddr *) &local, addrlen) < 0) {
 		err("bind to local cli address failed: %m");
+		close(cli_sock);
 		return 4;
 	}
 	setsockopt(cli_sock, SOL_SOCKET, SO_PASSCRED,
@@ -2768,6 +2769,7 @@ int cli_command(char *cmd)
 		} else {
 			err("sendmsg failed: %m");
 		}
+		close(cli_sock);
 		return 5;
 	}
 
