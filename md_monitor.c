@@ -2303,11 +2303,8 @@ static void handle_event(struct udev_device *device)
 
 static void print_device(struct udev_device *device)
 {
-	struct timeval tv;
-	struct timezone tz;
 	int prop = 0;
 
-	gettimeofday(&tv, &tz);
 	warn("%-8s %s (%s)",
 	       udev_device_get_action(device),
 	       udev_device_get_devpath(device),
