@@ -329,6 +329,7 @@ static struct md_monitor *lookup_md_alias(const char *mdpath)
 {
 	struct md_monitor *tmp, *md = NULL;
 	const char *mdname;
+	const char *tmpname;
 
 	if (!mdpath || strlen(mdpath) == 0)
 		return NULL;
@@ -341,7 +342,14 @@ static struct md_monitor *lookup_md_alias(const char *mdpath)
 
 	pthread_mutex_lock(&md_lock);
 	list_for_each_entry(tmp, &md_list, entry) {
-		if (!strcmp(tmp->dev_name, mdname)) {
+		tmpname = udev_device_get_property_value(tmp->device,
+							 "MD_DEVNAME");
+		if (tmpname && !strcmp(tmpname, mdname)) {
+			md = tmp;
+			break;
+		}
+		tmpname = udev_device_get_sysname(tmp->device);
+		if (tmpname && !strcmp(tmpname, mdname)) {
 			md = tmp;
 			break;
 		}
