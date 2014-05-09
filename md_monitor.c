@@ -1362,13 +1362,23 @@ static void monitor_dasd(struct device_monitor *dev)
 static void add_component(struct md_monitor *md, struct device_monitor *dev,
 	const char *md_name)
 {
+	size_t md_namelen;
+
+	if (!md_name)
+		return;
+
+	md_namelen = strlen(md_name);
+	if (md_namelen > MD_NAMELEN)
+		md_namelen = MD_NAMELEN;
+
 	info("%s: Add component (%d/%d)", dev->dev_name,
 	     dev->md_index, dev->md_slot);
 	if (!dev->parent) {
 		udev_device_ref(md->device);
 		dev->parent = md->device;
 	}
-	strncpy(dev->md_name, md_name, strlen(md_name));
+	strncpy(dev->md_name, md_name, md_namelen);
+	dev->md_name[MD_NAMELEN - 1] = '\0';
 	if (dev->md_index < 0)
 		md_rdev_update_index(md, dev);
 	dasd_set_attribute(dev, "failfast", 1);
