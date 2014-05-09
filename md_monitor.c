@@ -820,7 +820,7 @@ int md_set_attribute(struct md_monitor *md_dev, const char *attr,
 	int attr_fd;
 	char attrpath[256];
 	char status[64];
-	size_t len, status_len = 64;
+	ssize_t len, status_len = 64;
 	int rc = 0;
 
 	sprintf(attrpath, "%s/md/%s", udev_device_get_syspath(md_dev->device),
@@ -880,7 +880,7 @@ int dasd_set_attribute(struct device_monitor *dev, const char *attr, int value)
 	int attr_fd;
 	char attrpath[256];
 	char status[64], *eptr;
-	size_t len, status_len = 64;
+	ssize_t len, status_len = 64;
 	int oldvalue;
 	int rc = 0;
 
