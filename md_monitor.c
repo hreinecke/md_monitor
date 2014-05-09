@@ -89,6 +89,7 @@ struct mdadm_exec {
 };
 
 #define CLI_BUFLEN 4096
+#define MD_NAMELEN 256
 
 struct cli_monitor {
 	int running;
@@ -97,7 +98,7 @@ struct cli_monitor {
 };
 
 struct md_monitor {
-	char dev_name[64];
+	char dev_name[MD_NAMELEN];
 	struct list_head entry;
 	struct list_head children;
 	pthread_mutex_t device_lock;
@@ -118,8 +119,8 @@ struct device_monitor {
 	struct list_head siblings;
 	struct udev_device *device;
 	struct udev_device *parent;
-	char dev_name[64];
-	char md_name[64];
+	char dev_name[MD_NAMELEN];
+	char md_name[MD_NAMELEN];
 	pthread_t thread;
 	pthread_mutex_t lock;
 	pthread_cond_t io_cond;
@@ -155,7 +156,7 @@ static int failfast_retries = 2;
 static sigset_t thread_sigmask;
 static int daemonize_monitor;
 static int log_priority = LOG_INFO;
-static char logname[64];
+static char logname[MD_NAMELEN];
 static int use_syslog;
 static int fail_mirror_side = 1;
 static int stop_on_sync = 1;
@@ -430,7 +431,11 @@ static struct md_monitor *lookup_md_new(struct udev_device *md_dev)
 			memset(md, 0, sizeof(struct md_monitor));
 		else
 			goto out_unlock;
-		strcpy(md->dev_name, mdname);
+		if (strlen(mdname) > MD_NAMELEN) {
+			warn("%s: MD name overflow, truncated", mdname);
+		}
+		strncpy(md->dev_name, mdname, MD_NAMELEN);
+		md->dev_name[MD_NAMELEN - 1] = '\0';
 	}
 	if (!md->device) {
 		md->device = md_dev;
@@ -481,11 +486,16 @@ static void dasd_monitor_put(struct device_monitor *dev)
 static struct device_monitor *allocate_dasd(struct udev_device *dasd_dev)
 {
 	struct device_monitor *dev;
+	const char *devname;
 
+	devname = udev_device_get_sysname(dasd_dev);
+	if (strlen(devname) > MD_NAMELEN) {
+		warn("%s: DASD device name too long", devname);
+		return NULL;
+	}
 	dev = malloc(sizeof(struct device_monitor));
 	if (!dev) {
-		err("%s: out of memory allocating device",
-		    udev_device_get_sysname(dasd_dev));
+		err("%s: out of memory allocating device", devname);
 		return NULL;
 	}
 	memset(dev, 0, sizeof(struct device_monitor));
@@ -498,7 +508,7 @@ static struct device_monitor *allocate_dasd(struct udev_device *dasd_dev)
 	pthread_cond_init(&dev->io_cond, NULL);
 	INIT_LIST_HEAD(&dev->siblings);
 	udev_device_ref(dev->device);
-	strcpy(dev->dev_name, udev_device_get_sysname(dasd_dev));
+	strcpy(dev->dev_name, devname);
 
 	return dev;
 }
