@@ -1,4 +1,4 @@
-.TH "setdasd" "8" "Mon Sep 23 2013" "md_monitor 5.1"
+.TH "setdasd" "8" "Mon Sep 23 2013" "md_monitor 5.2"
 .de bu
 .IP \(bu
 ..
