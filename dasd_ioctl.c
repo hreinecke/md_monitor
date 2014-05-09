@@ -55,7 +55,8 @@ int dasd_timeout_ioctl(struct udev_device *dev, int set)
 	int ioctl_arg = set ? BIODASDTIMEOUT : BIODASDRESYNC;
 	int ioctl_fd;
 	const char *devname;
-	char devnode[256];
+	const char *devnode;
+	char devnode_s[256];
 	int rc = 0;
 
 	if (!dev)
@@ -65,11 +66,10 @@ int dasd_timeout_ioctl(struct udev_device *dev, int set)
 	if (!devname)
 		return -ENXIO;
 
-	devnode[0] = '\0';
-	if (udev_device_get_devnode(dev)) {
-		strcpy(devnode, udev_device_get_devnode(dev));
-	} else {
-		sprintf(devnode, "/dev/%s", devname);
+	devnode = udev_device_get_devnode(dev);
+	if (!devnode) {
+		sprintf(devnode_s, "/dev/%s", devname);
+		devnode = devnode_s;
 	}
 	dbg("%s: calling DASD ioctl '%s'", devname,
 	    set ? "BIODASDTIMEOUT" : "BIODASDRESYNC");
@@ -101,7 +101,8 @@ int dasd_quiesce_ioctl(struct udev_device *dev, int set)
 	int ioctl_arg = set ? BIODASDQUIESCE : BIODASDRESUME;
 	int ioctl_fd;
 	const char *devname;
-	char devnode[256];
+	const char *devnode;
+	char devnode_s[256];
 	int rc = 0;
 
 	if (!dev)
@@ -111,11 +112,10 @@ int dasd_quiesce_ioctl(struct udev_device *dev, int set)
 	if (!devname)
 		return -ENXIO;
 
-	devnode[0] = '\0';
-	if (udev_device_get_devnode(dev)) {
-		strcpy(devnode, udev_device_get_devnode(dev));
-	} else {
-		sprintf(devnode, "/dev/%s", devname);
+	devnode = udev_device_get_devnode(dev);
+	if (!devnode) {
+		sprintf(devnode_s, "/dev/%s", devname);
+		devnode = devnode_s;
 	}
 	dbg("%s: calling DASD ioctl '%s'", devname,
 	    set ? "BIODASDQUIESCE" : "BIODASDRESUME");
