@@ -2720,8 +2720,13 @@ struct cli_monitor *monitor_cli(void)
 		free(cli);
 		return NULL;
 	}
-	setsockopt(cli->sock, SOL_SOCKET, SO_PASSCRED,
-		   &feature_on, sizeof(feature_on));
+	if (setsockopt(cli->sock, SOL_SOCKET, SO_PASSCRED,
+		       &feature_on, sizeof(feature_on)) < 0) {
+		err("cannot enable credentials passing: %m");
+		close(cli->sock);
+		free(cli);
+		return NULL;
+	}
 
 	rc = pthread_create(&cli->thread, &cli_attr, cli_monitor_thread, cli);
 	if (rc) {
@@ -2767,8 +2772,12 @@ int cli_command(char *cmd)
 		close(cli_sock);
 		return 4;
 	}
-	setsockopt(cli_sock, SOL_SOCKET, SO_PASSCRED,
-		   &feature_on, sizeof(feature_on));
+	if (setsockopt(cli_sock, SOL_SOCKET, SO_PASSCRED,
+		       &feature_on, sizeof(feature_on)) < 0) {
+		err("enabling credential passing failed: %m");
+		close(cli_sock);
+		return 6;
+	}
 	memset(&sun, 0x00, sizeof(struct sockaddr_un));
 	sun.sun_family = AF_LOCAL;
 	strcpy(&sun.sun_path[1], "/org/kernel/md/md_monitor");
