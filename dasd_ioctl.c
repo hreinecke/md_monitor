@@ -91,8 +91,8 @@ int dasd_timeout_ioctl(struct udev_device *dev, int set)
 			dbg("%s: %s DASD timeout flag", devname,
 			    set ? "set" : "unset");
 		}
+		close(ioctl_fd);
 	}
-	close(ioctl_fd);
 	return rc;
 }
 
@@ -137,8 +137,8 @@ int dasd_quiesce_ioctl(struct udev_device *dev, int set)
 			dbg("%s: DASD %s", devname,
 			    set ? "quiesced" : "resumed");
 		}
+		close(ioctl_fd);
 	}
-	close(ioctl_fd);
 	return rc;
 }
 
