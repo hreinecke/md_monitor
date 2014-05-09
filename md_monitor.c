@@ -2340,6 +2340,7 @@ static void *mdadm_exec_thread (void *ctx)
 			     failfast_timeout);
 			if (gettimeofday(&start_time, NULL)) {
 				err("md_exec: failed to get time: %m");
+				pthread_mutex_unlock(&pending_lock);
 				break;
 			}
 			tmo.tv_sec = start_time.tv_sec + failfast_timeout;
