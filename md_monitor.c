@@ -1332,17 +1332,22 @@ static void monitor_dasd(struct device_monitor *dev)
 		info("%s: Re-start monitor", dev->dev_name);
 		dev->running = 0;
 		pthread_mutex_unlock(&dev->lock);
+		/* Yield lock here to give stale threads time to react */
 	} else {
 		pthread_mutex_unlock(&dev->lock);
 		/* Start new monitor thread */
 		info("%s: Start new monitor", dev->dev_name);
 	}
+	pthread_mutex_lock(&dev->lock);
 	dev->running = 1;
+	pthread_mutex_unlock(&dev->lock);
 	rc = pthread_create(&thread, &monitor_attr,
 			    dasd_monitor_thread, dev);
 	if (rc) {
+		pthread_mutex_lock(&dev->lock);
 		dev->running = 0;
 		dev->io_status = IO_UNKNOWN;
+		pthread_mutex_unlock(&dev->lock);
 		warn("%s: Failed to start monitor thread, error %d",
 		     dev->dev_name, rc);
 	} else {
