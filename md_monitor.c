@@ -947,14 +947,15 @@ remove:
 
 static int dasd_setup_aio(struct device_monitor *dev)
 {
-	char devnode[256];
+	const char *devnode;
+	char devnode_s[256];
 	int rc, flags;
 
-	devnode[0] = '\0';
-	if (udev_device_get_devnode(dev->device)) {
-		strcpy(devnode, udev_device_get_devnode(dev->device));
-	} else {
-		sprintf(devnode, "/dev/%s", dev->dev_name);
+	devnode = udev_device_get_devnode(dev->device);
+	if (!devnode) {
+		warn("%s: no device node from udev", dev->dev_name);
+		sprintf(devnode_s, "/dev/%s", dev->dev_name);
+		devnode = devnode_s;
 	}
 	if (!strlen(devnode)) {
 		warn("%s: no device node found", dev->dev_name);
