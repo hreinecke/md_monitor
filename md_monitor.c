@@ -802,7 +802,7 @@ int md_set_attribute(struct md_monitor *md_dev, const char *attr,
 	int attr_fd;
 	char attrpath[256];
 	char status[64];
-	size_t len;
+	size_t len, status_len = 64;
 	int rc = 0;
 
 	sprintf(attrpath, "%s/md/%s", udev_device_get_syspath(md_dev->device),
@@ -815,8 +815,8 @@ int md_set_attribute(struct md_monitor *md_dev, const char *attr,
 		goto remove;
 	}
 
-	memset(status, 0, sizeof(status));
-	len = read(attr_fd, status, sizeof(status));
+	memset(status, 0, status_len);
+	len = read(attr_fd, status, status_len);
 	if (len < 0) {
 		warn("%s: cannot read '%s' attribute: %m",
 		     md_name, attr);
@@ -827,10 +827,16 @@ int md_set_attribute(struct md_monitor *md_dev, const char *attr,
 		warn("%s: EOF on reading '%s' attribute", md_name, attr);
 		goto remove;
 	}
+	if (len == status_len) {
+		warn("%s: Overflow on reading '%s' attribute", md_name, attr);
+		goto remove;
+	}
 	if (status[len - 1] == '\n') {
 		status[len - 1] = '\0';
 		len--;
 	}
+	status[status_len - 1] = '\0';
+
 	if (!strlen(status)) {
 		warn("%s: empty '%s' attribute", md_name, attr);
 		goto remove;
@@ -856,7 +862,7 @@ int dasd_set_attribute(struct device_monitor *dev, const char *attr, int value)
 	int attr_fd;
 	char attrpath[256];
 	char status[64], *eptr;
-	size_t len;
+	size_t len, status_len = 64;
 	int oldvalue;
 	int rc = 0;
 
@@ -871,8 +877,8 @@ int dasd_set_attribute(struct device_monitor *dev, const char *attr, int value)
 		return 0;
 	}
 
-	memset(status, 0, sizeof(status));
-	len = read(attr_fd, status, sizeof(status));
+	memset(status, 0, status_len);
+	len = read(attr_fd, status, status_len);
 	if (len < 0) {
 		warn("%s: cannot read '%s' attribute: %m",
 		     dev->dev_name, attr);
@@ -883,10 +889,17 @@ int dasd_set_attribute(struct device_monitor *dev, const char *attr, int value)
 		warn("%s: EOF on reading '%s' attribute", dev->dev_name, attr);
 		goto remove;
 	}
+	if (len == status_len) {
+		warn("%s: Overflow on reading '%s' attribute",
+		     dev->dev_name, attr);
+		goto remove;
+	}
 	if (status[len - 1] == '\n') {
 		status[len - 1] = '\0';
 		len--;
 	}
+	status[status_len - 1] = '\0';
+
 	if (!strlen(status)) {
 		warn("%s: empty '%s' attribute", dev->dev_name, attr);
 		goto remove;
