@@ -40,7 +40,7 @@ for dasd in $(mdadm --detail ${MD_DEV} | sed -n 's/.*set-A failfast *\/dev\/\(.*
 done
 num=0
 for dasd in ${DASDS_LEFT[@]}  ; do
-    devno=$(lsdasd | sed -n "/$dasd/p" | cut -f 1 -d ' ')
+    devno=$(lsdasd | sed -n "/[[:space:]]$dasd[[:space:]]/p" | cut -f 1 -d ' ')
     echo "$(date) Reserve DASD $devno on left half ..."
     result=$(run_wget ${devno} online)
     if [ "$result" ] ; then
@@ -112,7 +112,7 @@ echo "$(date) Wait for $IO_TIMEOUT seconds"
 sleep $IO_TIMEOUT
 
 for dasd in ${DASDS_LEFT[@]}  ; do
-    devno=$(lsdasd | sed -n "/$dasd/p" | cut -f 1 -d ' ')
+    devno=$(lsdasd | sed -n "/[[:space:]]$dasd[[:space:]]/p" | cut -f 1 -d ' ')
     echo "$(date) Release DASD $devno on left half ..."
     result=$(run_wget ${devno} Release)
     if [ "$result" ] ; then
