@@ -518,7 +518,7 @@ static void attach_dasd(struct udev_device *dev)
 	struct md_monitor *found_md = NULL;
 	struct udev_device *dasd_dev = NULL;
 	struct device_monitor *tmp, *found = NULL;
-	const char *dasd_devtype, *alias;
+	const char *dasd_devtype, *alias, *status;
 	const char *devname = udev_device_get_sysname(dev);
 	char devpath[256];
 	DIR *dirp;
@@ -530,6 +530,16 @@ static void attach_dasd(struct udev_device *dev)
 	if (!dasd_devtype || !strncmp(dasd_devtype, "disk", 4)) {
 		/* Not a partition, ignore */
 		info("%s: not a partition, ignore", devname);
+		return;
+	}
+	status = udev_device_get_sysattr_value(dasd_dev, "status");
+	if (status && strcmp(status, "online")) {
+		/*
+		 * Device not online. The kernel will send out
+		 * an event once the device is online, so
+		 * we can safely skip it here.
+		 */
+		info("%s: device in state %s, ignore", devname, status);
 		return;
 	}
 	alias = udev_device_get_sysattr_value(dasd_dev, "alias");
