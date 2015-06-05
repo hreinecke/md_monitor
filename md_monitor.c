@@ -73,7 +73,7 @@ enum md_rdev_status {
 	RESERVED,	/* end marker */
 };
 
-enum dasd_io_status {
+enum device_io_status {
 	IO_UNKNOWN,
 	IO_ERROR,
 	IO_OK,
@@ -125,7 +125,7 @@ struct device_monitor {
 	pthread_mutex_t lock;
 	pthread_cond_t io_cond;
 	enum md_rdev_status md_status;
-	enum dasd_io_status io_status;
+	enum device_io_status io_status;
 	int ref;
 	int md_index;
 	int md_slot;
@@ -226,11 +226,11 @@ const char md_rdev_print_state_short(enum md_rdev_status state)
 	return md_rdev_state_ptr->desc_short;
 }
 
-struct dasd_io_state_t {
-	enum dasd_io_status state;
+struct device_io_state_t {
+	enum device_io_status state;
 	char desc_short;
 	char *desc;
-} dasd_io_state_list[] = {
+} device_io_state_list[] = {
 	{ IO_UNKNOWN, '.', "unknown"},
 	{ IO_ERROR, 'X', "internal error"},
 	{ IO_OK, 'A', "I/O ok"},
@@ -240,24 +240,24 @@ struct dasd_io_state_t {
 	{ IO_RESERVED, 0, NULL }
 };
 
-const char *dasd_io_print_state(enum dasd_io_status state)
+const char *device_io_print_state(enum device_io_status state)
 {
-	struct dasd_io_state_t *dasd_io_state_ptr = dasd_io_state_list;
+	struct device_io_state_t *device_io_state_ptr = device_io_state_list;
 
-	while (dasd_io_state_ptr->desc &&
-	       dasd_io_state_ptr->state != state)
-		dasd_io_state_ptr++;
-	return dasd_io_state_ptr->desc;
+	while (device_io_state_ptr->desc &&
+	       device_io_state_ptr->state != state)
+		device_io_state_ptr++;
+	return device_io_state_ptr->desc;
 }
 
-const char dasd_io_print_state_short(enum dasd_io_status state)
+const char device_io_print_state_short(enum device_io_status state)
 {
-	struct dasd_io_state_t *dasd_io_state_ptr = dasd_io_state_list;
+	struct device_io_state_t *device_io_state_ptr = device_io_state_list;
 
-	while (dasd_io_state_ptr->desc_short &&
-	       dasd_io_state_ptr->state != state)
-		dasd_io_state_ptr++;
-	return dasd_io_state_ptr->desc_short;
+	while (device_io_state_ptr->desc_short &&
+	       device_io_state_ptr->state != state)
+		device_io_state_ptr++;
+	return device_io_state_ptr->desc_short;
 }
 
 static void add_component(struct md_monitor *, struct device_monitor *,
@@ -1010,7 +1010,7 @@ static int dasd_setup_aio(struct device_monitor *dev)
 	return 0;
 }
 
-static enum dasd_io_status dasd_check_aio(struct device_monitor *dev,
+static enum device_io_status dasd_check_aio(struct device_monitor *dev,
 					  int timeout)
 {
 	struct iocb *ios[1] = { &dev->io };
@@ -1019,7 +1019,7 @@ static enum dasd_io_status dasd_check_aio(struct device_monitor *dev,
 	struct io_event event;
 	struct timespec	tmo = { .tv_sec = timeout };
 	int rc;
-	enum dasd_io_status io_status = IO_UNKNOWN;
+	enum device_io_status io_status = IO_UNKNOWN;
 	sigset_t newmask, oldmask;
 	struct sigaction act, oact;
 
@@ -1146,7 +1146,7 @@ void *dasd_monitor_thread (void *ctx)
 {
 	struct device_monitor *dev = ctx;
 	unsigned long pgsize = getpagesize();
-	enum dasd_io_status io_status;
+	enum device_io_status io_status;
 	enum md_rdev_status md_status, new_status;
 	struct timespec tmo;
 	int rc, aio_timeout = 0, sig_timeout = checker_timeout;
@@ -1288,7 +1288,7 @@ void *dasd_monitor_thread (void *ctx)
 		}
 		info("%s: state %s / %s",
 		     dev->dev_name, md_rdev_print_state(new_status),
-		     dasd_io_print_state(io_status));
+		     device_io_print_state(io_status));
 		if (!sig_timeout) {
 			pthread_mutex_lock(&dev->lock);
 			break;
@@ -1448,7 +1448,7 @@ static int reset_component(struct device_monitor *dev)
 	pthread_mutex_lock(&dev->lock);
 	if (dev->io_status != IO_OK) {
 		info("%s: I/O status %s, do not reset device", dev->dev_name,
-		     dasd_io_print_state(dev->io_status));
+		     device_io_print_state(dev->io_status));
 		pthread_mutex_unlock(&dev->lock);
 		return -EIO;
 	}
@@ -1640,7 +1640,7 @@ static void reset_mirror(struct device_monitor *dev)
 		int this_side = tmp->md_slot % (md_dev->layout & 0xFF);
 		dbg("%s: dev %s side %d state %s / %s", md_name, tmp->dev_name,
 		     this_side, md_rdev_print_state(tmp->md_status),
-		     dasd_io_print_state(tmp->io_status));
+		     device_io_print_state(tmp->io_status));
 		if (tmp->md_status == RECOVERY)
 			continue;
 		if (tmp->io_status == IO_UNKNOWN ||
@@ -2199,7 +2199,7 @@ static int display_io_status(struct md_monitor *md_dev, char *buf, int buflen)
 		while (dev->ioctx && dev->io_status == IO_UNKNOWN)
 			pthread_cond_wait(&dev->io_cond, &dev->lock);
 
-		status = dasd_io_print_state_short(dev->io_status);
+		status = device_io_print_state_short(dev->io_status);
 		pthread_mutex_unlock(&dev->lock);
 
 		buf[slot] = status;
@@ -2240,7 +2240,7 @@ static int display_md(struct md_monitor *md_dev, char *buf)
 			      md_dev->dev_name, dev->dev_name,
 			      dev->md_slot, md_dev->raid_disks,
 			      md_rdev_print_state(dev->md_status),
-			      dasd_io_print_state(dev->io_status));
+			      device_io_print_state(dev->io_status));
 		if ((bufsize + len) > CLI_BUFLEN) {
 			warn("%s: CLI buffer too small, min %d",
 			     md_dev->dev_name, bufsize + len);
