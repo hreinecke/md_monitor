@@ -633,29 +633,29 @@ static void detach_dasd(struct udev_device *dev)
 	}
 }
 
-static void discover_dasd(struct udev *udev)
+static void discover_devices(struct udev *udev)
 {
-	struct udev_enumerate *dasd_enumerate;
+	struct udev_enumerate *device_enumerate;
 	struct udev_list_entry *entry;
-	struct udev_device *dasd_dev;
-	const char *dasd_devpath;
+	struct udev_device *dev;
+	const char *devpath;
 
-	dasd_enumerate = udev_enumerate_new(udev);
-	udev_enumerate_add_match_subsystem(dasd_enumerate, "block");
-	udev_enumerate_add_match_sysname(dasd_enumerate, "dasd*");
-	udev_enumerate_add_match_is_initialized(dasd_enumerate);
-	udev_enumerate_scan_devices(dasd_enumerate);
+	device_enumerate = udev_enumerate_new(udev);
+	udev_enumerate_add_match_subsystem(device_enumerate, "block");
+	udev_enumerate_add_match_sysname(device_enumerate, "dasd*");
+	udev_enumerate_add_match_is_initialized(device_enumerate);
+	udev_enumerate_scan_devices(device_enumerate);
 
 	udev_list_entry_foreach(entry,
-				udev_enumerate_get_list_entry(dasd_enumerate)) {
-		dasd_devpath = udev_list_entry_get_name(entry);
-		dasd_dev = udev_device_new_from_syspath(udev, dasd_devpath);
-		if (dasd_dev) {
-			attach_dasd(dasd_dev);
-			udev_device_unref(dasd_dev);
+				udev_enumerate_get_list_entry(device_enumerate)) {
+		devpath = udev_list_entry_get_name(entry);
+		dev = udev_device_new_from_syspath(udev, devpath);
+		if (dev) {
+			attach_dasd(dev);
+			udev_device_unref(dev);
 		}
 	}
-	udev_enumerate_unref(dasd_enumerate);
+	udev_enumerate_unref(device_enumerate);
 }
 
 static void md_rdev_update_index(struct md_monitor *md,
@@ -3263,8 +3263,8 @@ int main(int argc, char *argv[])
 	if (!mdx)
 		goto out;
 
-	/* Discover existing DASDs */
-	discover_dasd(udev);
+	/* Discover existing devices */
+	discover_devices(udev);
 
 	/* Discover existing MD arrays */
 	discover_md(udev);
