@@ -671,7 +671,7 @@ static void md_rdev_update_index(struct md_monitor *md,
 	}
 
 	sprintf(mdpath, "/dev/%s", md->dev_name);
-	ioctl_fd = open(mdpath, O_RDWR|O_NONBLOCK);
+	ioctl_fd = open(mdpath, O_RDONLY|O_NONBLOCK);
 	if (ioctl_fd < 0) {
 		warn("%s: Couldn't open %s: %m", md->dev_name, mdpath);
 		return;
@@ -735,7 +735,7 @@ enum md_rdev_status md_rdev_check_state(struct device_monitor *dev)
 	if (!sysname)
 		return UNKNOWN;
 	sprintf(attrpath, "/dev/%s", sysname);
-	ioctl_fd = open(attrpath, O_RDWR|O_NONBLOCK);
+	ioctl_fd = open(attrpath, O_RDONLY|O_NONBLOCK);
 	if (ioctl_fd < 0) {
 		warn("%s: cannot open %s for MD ioctl: %m",
 		     dev->dev_name, attrpath);
@@ -1783,7 +1783,7 @@ static void discover_md_components(struct md_monitor *md)
 	info("%s: discover", mdname);
 	md->in_discovery = 1;
 	sprintf(mdpath, "/dev/%s", mdname);
-	ioctl_fd = open(mdpath, O_RDWR|O_NONBLOCK);
+	ioctl_fd = open(mdpath, O_RDONLY|O_NONBLOCK);
 	if (ioctl_fd < 0) {
 		warn("%s: Couldn't open %s: %m", mdname, mdpath);
 		md->in_discovery = 0;
@@ -2049,7 +2049,7 @@ static int check_md(struct md_monitor *md_dev, mdu_array_info_t *info)
 		return ENODEV;
 
 	sprintf(devpath, "/dev/%s", md_dev->dev_name);
-	ioctl_fd = open(devpath, O_RDWR|O_NONBLOCK);
+	ioctl_fd = open(devpath, O_RDONLY|O_NONBLOCK);
 	if (ioctl_fd >= 0) {
 		if (ioctl(ioctl_fd, GET_ARRAY_INFO, info) < 0) {
 			rc = errno;
