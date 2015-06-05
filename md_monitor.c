@@ -483,12 +483,12 @@ static void dasd_monitor_put(struct device_monitor *dev)
 	pthread_mutex_unlock(&dev->lock);
 }
 
-static struct device_monitor *allocate_dasd(struct udev_device *dasd_dev)
+static struct device_monitor *allocate_device(struct udev_device *udev_dev)
 {
 	struct device_monitor *dev;
 	const char *devname;
 
-	devname = udev_device_get_sysname(dasd_dev);
+	devname = udev_device_get_sysname(udev_dev);
 	if (strlen(devname) > MD_NAMELEN) {
 		warn("%s: DASD device name too long", devname);
 		return NULL;
@@ -499,7 +499,7 @@ static struct device_monitor *allocate_dasd(struct udev_device *dasd_dev)
 		return NULL;
 	}
 	memset(dev, 0, sizeof(struct device_monitor));
-	dev->device = udev_device_get_parent(dasd_dev);
+	dev->device = udev_device_get_parent(udev_dev);
 	dev->ref = 1;
 	dev->md_slot = -1;
 	dev->md_index = -1;
@@ -513,25 +513,25 @@ static struct device_monitor *allocate_dasd(struct udev_device *dasd_dev)
 	return dev;
 }
 
-static void attach_dasd(struct udev_device *dev)
+static void attach_device(struct udev_device *udev_dev)
 {
 	struct md_monitor *found_md = NULL;
 	struct udev_device *dasd_dev = NULL;
 	struct device_monitor *tmp, *found = NULL;
-	const char *dasd_devtype, *alias, *status;
-	const char *devname = udev_device_get_sysname(dev);
+	const char *devtype, *alias, *status;
+	const char *devname = udev_device_get_sysname(udev_dev);
 	char devpath[256];
 	DIR *dirp;
 	struct dirent *dirfd;
 
-	dasd_dev = udev_device_get_parent(dev);
-	dasd_devtype = udev_device_get_devtype(dev);
-	dbg("dev %s devtype %s", devname, dasd_devtype);
-	if (!dasd_devtype || !strncmp(dasd_devtype, "disk", 4)) {
+	devtype = udev_device_get_devtype(udev_dev);
+	dbg("dev %s devtype %s", devname, devtype);
+	if (!devtype || !strncmp(devname, "dasd", 4)) {
 		/* Not a partition, ignore */
 		info("%s: not a partition, ignore", devname);
 		return;
 	}
+	dasd_dev = udev_device_get_parent(udev_dev);
 	status = udev_device_get_sysattr_value(dasd_dev, "status");
 	if (status && strcmp(status, "online")) {
 		/*
@@ -549,7 +549,7 @@ static void attach_dasd(struct udev_device *dev)
 		return;
 	}
 	sprintf(devpath, "%s/holders",
-		udev_device_get_syspath(dev));
+		udev_device_get_syspath(udev_dev));
 	dirp = opendir(devpath);
 	if (dirp) {
 		while ((dirfd = readdir(dirp))) {
@@ -571,16 +571,16 @@ static void attach_dasd(struct udev_device *dev)
 	if (found) {
 		info("%s: already attached", found->dev_name);
 	} else {
-		found = allocate_dasd(dev);
+		found = allocate_device(udev_dev);
 		if (!found) {
 			err("%s: out of memory allocating device",
-			    udev_device_get_sysname(dev));
+			    udev_device_get_sysname(udev_dev));
 			unlock_device_list();
 			return;
 		}
 		list_add(&found->entry, &device_list);
 		info("%s: attached '%s'", found->dev_name,
-		     udev_device_get_devpath(dev));
+		     udev_device_get_devpath(udev_dev));
 	}
 	unlock_device_list();
 	if (found_md) {
@@ -595,17 +595,17 @@ static void attach_dasd(struct udev_device *dev)
 	}
 }
 
-static void detach_dasd(struct udev_device *dev)
+static void detach_device(struct udev_device *udev_dev)
 {
 	struct device_monitor *tmp, *found = NULL;
-	const char *dasd_name;
+	const char *devname;
 
-	dasd_name = udev_device_get_sysname(dev);
-	if (!dasd_name)
+	devname = udev_device_get_sysname(udev_dev);
+	if (!devname)
 		return;
 	lock_device_list();
 	list_for_each_entry(tmp, &device_list, entry) {
-		if (!strcmp(tmp->dev_name, dasd_name)) {
+		if (!strcmp(tmp->dev_name, devname)) {
 			list_del_init(&tmp->entry);
 			found = tmp;
 			break;
@@ -629,7 +629,7 @@ static void detach_dasd(struct udev_device *dev)
 		}
 		dasd_monitor_put(found);
 	} else {
-		warn("%s: no device to detach", dasd_name);
+		warn("%s: no device to detach", devname);
 	}
 }
 
@@ -651,7 +651,7 @@ static void discover_devices(struct udev *udev)
 		devpath = udev_list_entry_get_name(entry);
 		dev = udev_device_new_from_syspath(udev, devpath);
 		if (dev) {
-			attach_dasd(dev);
+			attach_device(dev);
 			udev_device_unref(dev);
 		}
 	}
@@ -1862,7 +1862,7 @@ static void discover_md_components(struct md_monitor *md)
 			udev = udev_device_get_udev(md->device);
 			raid_dev = udev_device_new_from_devnum(udev, 'b', raid_devt);
 			if (raid_dev) {
-				found = allocate_dasd(raid_dev);
+				found = allocate_device(raid_dev);
 				udev_device_unref(raid_dev);
 			} else {
 				warn("%s: raid disk %d (%d:%d) not found",
@@ -2294,7 +2294,7 @@ static void handle_event(struct udev_device *device)
 		return;
 	if (!strcmp(action, "add")) {
 		if (!strncmp(devname, "dasd", 4)) {
-			attach_dasd(device);
+			attach_device(device);
 		}
 	} else if (!strcmp(action, "change")) {
 		if (!strncmp(devname, "md", 2)) {
@@ -2302,14 +2302,14 @@ static void handle_event(struct udev_device *device)
 				unmonitor_md(device);
 		}
 		if (!strncmp(devname, "dasd", 4)) {
-			attach_dasd(device);
+			attach_device(device);
 		}
 	} else if (!strcmp(action, "remove")) {
 		if (!strncmp(devname, "md", 2)) {
 			unmonitor_md(device);
 		}
 		if (!strncmp(devname, "dasd" , 4)) {
-			detach_dasd(device);
+			detach_device(device);
 		}
 	} else if (!strcmp(action, "move")) {
 		/* Move event, generated by z/VM ATTACH/DETACH */
