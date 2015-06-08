@@ -30,8 +30,6 @@
 #include <syslog.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <sys/ioctl.h>
-#include <linux/fs.h>
 #include <errno.h>
 #include <signal.h>
 #include <getopt.h>
@@ -54,90 +52,12 @@
 #include <libudev.h>
 
 #include "list.h"
+#include "md_monitor.h"
 #include "md_debug.h"
+#include "dasd_util.h"
 #include "dasd_ioctl.h"
 
 const char version_str[] = "md_monitor version 5.3";
-
-enum md_rdev_status {
-	UNKNOWN,	/* Not checked */
-	IN_SYNC,	/* device is in sync */
-	FAULTY,		/* device has been marked faulty */
-	TIMEOUT,	/* device has been marked faulty and timeout */
-	SPARE,		/* device has been marked spare */
-	RECOVERY,	/* device is in recovery */
-	REMOVED,	/* device is faulty,
-			 * 'remove' and 're-add' has been sent */
-	PENDING,	/* device is in_sync, 'faulty' has been send */
-	BLOCKED,	/* md is blocked */
-	RESERVED,	/* end marker */
-};
-
-enum device_io_status {
-	IO_UNKNOWN,
-	IO_ERROR,
-	IO_OK,
-	IO_FAILED,
-	IO_PENDING,
-	IO_TIMEOUT,
-	IO_RESERVED
-};
-
-struct mdadm_exec {
-	int running;
-	pthread_t thread;
-};
-
-#define CLI_BUFLEN 4096
-#define MD_NAMELEN 256
-
-struct cli_monitor {
-	int running;
-	int sock;
-	pthread_t thread;
-};
-
-struct md_monitor {
-	char dev_name[MD_NAMELEN];
-	struct list_head entry;
-	struct list_head children;
-	pthread_mutex_t device_lock;
-	struct udev_device *device;
-	pthread_mutex_t status_lock;
-	struct list_head pending;
-	enum md_rdev_status pending_status;
-	int pending_side;
-	int raid_disks;
-	int layout;
-	int in_recovery;
-	int degraded;
-	int in_discovery;
-};
-
-struct device_monitor {
-	struct list_head entry;
-	struct list_head siblings;
-	struct udev_device *device;
-	struct udev_device *parent;
-	char dev_name[MD_NAMELEN];
-	char md_name[MD_NAMELEN];
-	pthread_t thread;
-	pthread_mutex_t lock;
-	pthread_cond_t io_cond;
-	enum md_rdev_status md_status;
-	enum device_io_status io_status;
-	int ref;
-	int md_index;
-	int md_slot;
-	int fd;
-	int running;
-	int aio_active;
-	struct timeval aio_start_time;
-	struct iocb io;
-	io_context_t ioctx;
-	int blksize;
-	unsigned char *buf;
-};
 
 LIST_HEAD(md_list);
 LIST_HEAD(device_list);
@@ -270,8 +190,6 @@ static void reset_mirror(struct device_monitor *);
 static void discover_md_components(struct md_monitor *md);
 static void remove_md_component(struct md_monitor *md_dev,
 				struct device_monitor *dev);
-static int dasd_set_attribute(struct device_monitor *dev, const char *attr,
-			      int value);
 static void monitor_device(struct device_monitor *);
 
 struct timeval start_time, sum_time;
@@ -297,7 +215,7 @@ static void unlock_device_list(void)
 	pthread_mutex_unlock(&device_lock);
 }
 
-static void sig_handler(int signum)
+void sig_handler(int signum)
 {
 	if (signum == SIGINT || signum == SIGTERM) {
 		fflush(logfd);
@@ -885,250 +803,11 @@ remove:
 	return rc;
 }
 
-int dasd_set_attribute(struct device_monitor *dev, const char *attr, int value)
-{
-	struct udev_device *parent;
-	int attr_fd;
-	char attrpath[256];
-	char status[64], *eptr;
-	ssize_t len, status_len = 64;
-	int oldvalue;
-	int rc = 0;
-
-	parent = udev_device_get_parent(dev->device);
-	if (!parent)
-		return 0;
-	sprintf(attrpath, "%s/%s", udev_device_get_syspath(parent), attr);
-	attr_fd = open(attrpath, O_RDWR);
-	if (attr_fd < 0) {
-		info("%s: failed to open '%s' attribute for %s: %m",
-		     dev->dev_name, attr, attrpath);
-		return 0;
-	}
-
-	memset(status, 0, status_len);
-	len = read(attr_fd, status, status_len);
-	if (len < 0) {
-		warn("%s: cannot read '%s' attribute: %m",
-		     dev->dev_name, attr);
-		rc = errno;
-		goto remove;
-	}
-	if (len == 0) {
-		warn("%s: EOF on reading '%s' attribute", dev->dev_name, attr);
-		goto remove;
-	}
-	if (len == status_len) {
-		warn("%s: Overflow on reading '%s' attribute",
-		     dev->dev_name, attr);
-		goto remove;
-	}
-	if (status[len - 1] == '\n') {
-		status[len - 1] = '\0';
-		len--;
-	}
-	status[status_len - 1] = '\0';
-
-	if (!strlen(status)) {
-		warn("%s: empty '%s' attribute", dev->dev_name, attr);
-		goto remove;
-	}
-	oldvalue = strtoul(status, &eptr, 10);
-	if (status == eptr) {
-		warn("%s: invalid '%s' attribute value '%s'",
-		     dev->dev_name, attr, status);
-		goto remove;
-	}
-	if (oldvalue != value) {
-		sprintf(status, "%d", value);
-		len = write(attr_fd, status, strlen(status));
-		if (len < 0) {
-			warn("%s: cannot set '%s' attribute to '%s': %m",
-			     dev->dev_name, attr, status);
-			rc = errno;
-		}
-		info("%s: '%s' = '%s'", dev->dev_name, attr, status);
-		rc = 0;
-	}
-remove:
-	if (attr_fd >= 0)
-		close(attr_fd);
-	return rc;
-}
-
-static int dasd_setup_aio(struct device_monitor *dev)
-{
-	const char *devnode;
-	char devnode_s[256];
-	int rc, flags;
-
-	devnode = udev_device_get_devnode(dev->device);
-	if (!devnode) {
-		warn("%s: no device node from udev", dev->dev_name);
-		sprintf(devnode_s, "/dev/%s", dev->dev_name);
-		devnode = devnode_s;
-	}
-	if (!strlen(devnode)) {
-		warn("%s: no device node found", dev->dev_name);
-		return ENXIO;
-	}
-	rc = io_setup(1, &dev->ioctx);
-	if (rc != 0) {
-		warn("%s: io_setup failed with %d",
-		     dev->dev_name, -rc);
-		dev->ioctx = 0;
-		return -rc;
-	}
-	if (dev->fd < 0) {
-		dev->fd = open(devnode, O_RDONLY);
-		if (dev->fd  < 0) {
-			warn("%s: cannot open %s for aio: %m",
-			     dev->dev_name, devnode);
-			return errno;
-		}
-	}
-	flags = fcntl(dev->fd, F_GETFL);
-	if (flags < 0) {
-		warn("%s: fcntl GETFL failed: %m", dev->dev_name);
-		return errno;
-	}
-
-	if (!(flags & O_DIRECT)) {
-		flags |= O_DIRECT;
-		rc = fcntl(dev->fd, F_SETFL, flags);
-	}
-
-	if (ioctl(dev->fd, BLKBSZGET, &dev->blksize) < 0)
-		dev->blksize = 512;
-
-	if (dev->blksize > 4096) {
-		/*
-		 * Sanity check for DASD; BSZGET is broken
-		 */
-		dev->blksize = 4096;
-	}
-	return 0;
-}
-
-static enum device_io_status dasd_check_aio(struct device_monitor *dev,
-					  int timeout)
-{
-	struct iocb *ios[1] = { &dev->io };
-	unsigned long pgsize = getpagesize();
-	unsigned char *ioptr;
-	struct io_event event;
-	struct timespec	tmo = { .tv_sec = timeout };
-	int rc;
-	enum device_io_status io_status = IO_UNKNOWN;
-	sigset_t newmask, oldmask;
-	struct sigaction act, oact;
-
-	if (!dev->ioctx) {
-		dbg("%s: no io context", dev->dev_name);
-		return io_status;
-	}
-
-	if (timeout && !dev->aio_active) {
-		info("%s: start new request",
-		     dev->dev_name);
-		memset(&dev->io, 0, sizeof(struct iocb));
-		ioptr = (unsigned char *) (((unsigned long)dev->buf +
-					    pgsize - 1) & (~(pgsize - 1)));
-		io_prep_pread(&dev->io, dev->fd, ioptr,
-			      4096, 0);
-		if (gettimeofday(&dev->aio_start_time, NULL)) {
-			warn("%s: failed to get time: %m", dev->dev_name);
-			dev->aio_start_time.tv_sec = 0;
-		}
-		if (io_submit(dev->ioctx, 1, ios) != 1) {
-			warn("%s: io_submit failed: %m", dev->dev_name);
-			return IO_ERROR;
-		}
-		dev->aio_active = 1;
-	}
-	/* Unblock SIGHUP */
-	memset(&act, 0x00, sizeof(struct sigaction));
-	act.sa_handler = sig_handler;
-	sigemptyset(&act.sa_mask);
-	act.sa_flags = SA_RESTART;
-	sigaction(SIGHUP, &act, &oact);
-	sigemptyset(&newmask);
-	sigaddset(&newmask, SIGHUP);
-	pthread_sigmask(SIG_UNBLOCK, &newmask, &oldmask);
-	errno = 0;
-	rc = io_getevents(dev->ioctx, 1L, 1L, &event, &tmo);
-	sigaction(SIGHUP, &oact, NULL);
-	pthread_sigmask(SIG_SETMASK, &oldmask, NULL);
-	if (rc < 0) {
-		if (rc != -EINTR) {
-			info("%s: async io returned %d",
-			     dev->dev_name, rc);
-			rc = io_cancel(dev->ioctx, ios[0], &event);
-			if (rc < 0) {
-				warn("%s: io_cancel returned %d",
-				     dev->dev_name, rc);
-			}
-			dev->aio_active = 0;
-			io_status = IO_ERROR;
-		} else {
-			info("%s: io_getevents interrupted", dev->dev_name);
-			io_status = IO_PENDING;
-		}
-	} else if (rc < 1L) {
-		if (timeout) {
-			warn("%s: path timeout", dev->dev_name);
-			io_status = IO_TIMEOUT;
-		} else if (dev->aio_active) {
-			dbg("%s: no events", dev->dev_name);
-			io_status = IO_PENDING;
-		} else {
-			dbg("%s: no async io submitted", dev->dev_name);
-			io_status = IO_UNKNOWN;
-		}
-	} else {
-		struct timeval diff, end_time;
-
-		if (dev->aio_start_time.tv_sec &&
-		    gettimeofday(&end_time, NULL) == 0) {
-			timersub(&end_time, &dev->aio_start_time, &diff);
-		} else {
-			diff.tv_sec = 0;
-			diff.tv_usec = 0;
-		}
-		dev->aio_active = 0;
-		if (event.res != dev->blksize) {
-			warn("%s: path failed, %lu.%06lu secs", dev->dev_name,
-			     diff.tv_sec, diff.tv_usec);
-			io_status = IO_FAILED;
-		} else {
-			info("%s: path ok, %lu.%06lu secs", dev->dev_name,
-			     diff.tv_sec, diff.tv_usec);
-			io_status = IO_OK;
-		}
-	}
-	return io_status;
-}
-
 void device_monitor_cleanup(void *data)
 {
 	struct device_monitor *dev = data;
-	int rc;
 
-	if (dev->ioctx) {
-		rc = io_destroy(dev->ioctx);
-		if (rc) {
-			warn("%s: io_destroy failed with %d",
-			     dev->dev_name, rc);
-		}
-		dev->ioctx = 0;
-		dev->aio_active = 0;
-	}
-	if (dev->fd >= 0) {
-		/* Reset any stale ioctl flags */
-		dasd_timeout_ioctl(dev->device, 0);
-		close(dev->fd);
-		dev->fd = -1;
-	}
+	dasd_cleanup_aio(dev);
 	if (dev->buf) {
 		free(dev->buf);
 		dev->buf = NULL;
@@ -1152,12 +831,10 @@ void *device_monitor_thread (void *ctx)
 	int rc, aio_timeout = 0, sig_timeout = checker_timeout;
 
 	device_monitor_get(dev);
-	/* Reset any stale ioctl flags */
-	dasd_timeout_ioctl(dev->device, 0);
+	if (!strncmp(dev->dev_name, "dasd", 4))
+		/* Reset any stale ioctl flags */
+		dasd_timeout_ioctl(dev->device, 0);
 
-	dev->buf = NULL;
-	dev->fd = -1;
-	dev->aio_active = 0;
 	pthread_cleanup_push(device_monitor_cleanup, dev);
 	rc = dasd_setup_aio(dev);
 	if (rc) {
@@ -1935,7 +1612,8 @@ static void fail_md(struct md_monitor *md_dev)
 		list_for_each_entry(dev, &md_dev->children, siblings) {
 			int this_side = dev->md_slot % (layout & 0xFF);
 			if (this_side == (pending_side >> 1)) {
-				dasd_timeout_ioctl(dev->device, 1);
+				if (!strncmp(dev->dev_name, "dasd", 4))
+					dasd_timeout_ioctl(dev->device, 1);
 			}
 		}
 		pthread_mutex_unlock(&md_dev->device_lock);
