@@ -643,6 +643,7 @@ static void discover_dasd(struct udev *udev)
 	dasd_enumerate = udev_enumerate_new(udev);
 	udev_enumerate_add_match_subsystem(dasd_enumerate, "block");
 	udev_enumerate_add_match_sysname(dasd_enumerate, "dasd*");
+	udev_enumerate_add_match_is_initialized(dasd_enumerate);
 	udev_enumerate_scan_devices(dasd_enumerate);
 
 	udev_list_entry_foreach(entry,
