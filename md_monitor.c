@@ -272,7 +272,7 @@ static void remove_md_component(struct md_monitor *md_dev,
 				struct device_monitor *dev);
 static int dasd_set_attribute(struct device_monitor *dev, const char *attr,
 			      int value);
-static void monitor_dasd(struct device_monitor *);
+static void monitor_device(struct device_monitor *);
 
 struct timeval start_time, sum_time;
 int num_time = 0;
@@ -452,7 +452,7 @@ out_unlock:
 	return md;
 }
 
-static struct device_monitor *dasd_monitor_get(struct device_monitor *dev)
+static struct device_monitor *device_monitor_get(struct device_monitor *dev)
 {
 	if (!dev)
 		return NULL;
@@ -464,7 +464,7 @@ static struct device_monitor *dasd_monitor_get(struct device_monitor *dev)
 	return dev;
 }
 
-static void dasd_monitor_put(struct device_monitor *dev)
+static void device_monitor_put(struct device_monitor *dev)
 {
 	if (!dev)
 		return;
@@ -589,7 +589,7 @@ static void attach_device(struct udev_device *udev_dev)
 		if (list_empty(&found->siblings))
 			list_add(&found->siblings, &found_md->children);
 		pthread_mutex_unlock(&found_md->device_lock);
-		monitor_dasd(found);
+		monitor_device(found);
 	} else {
 		dbg("%s: no md array found", devname);
 	}
@@ -627,7 +627,7 @@ static void detach_device(struct udev_device *udev_dev)
 				remove_component(found);
 			}
 		}
-		dasd_monitor_put(found);
+		device_monitor_put(found);
 	} else {
 		warn("%s: no device to detach", devname);
 	}
@@ -715,7 +715,7 @@ static void md_rdev_update_index(struct md_monitor *md,
 				dev->md_slot = info.raid_disk;
 			info("%s: update index on %s (%d/%d)", md->dev_name,
 			     dev->md_name, dev->md_index, dev->md_slot);
-			monitor_dasd(dev);
+			monitor_device(dev);
 			break;
 		}
 	}
@@ -1109,7 +1109,7 @@ static enum device_io_status dasd_check_aio(struct device_monitor *dev,
 	return io_status;
 }
 
-void dasd_monitor_cleanup(void *data)
+void device_monitor_cleanup(void *data)
 {
 	struct device_monitor *dev = data;
 	int rc;
@@ -1139,10 +1139,10 @@ void dasd_monitor_cleanup(void *data)
 	dev->thread = 0;
 	pthread_cond_signal(&dev->io_cond);
 	pthread_mutex_unlock(&dev->lock);
-	dasd_monitor_put(dev);
+	device_monitor_put(dev);
 }
 
-void *dasd_monitor_thread (void *ctx)
+void *device_monitor_thread (void *ctx)
 {
 	struct device_monitor *dev = ctx;
 	unsigned long pgsize = getpagesize();
@@ -1151,14 +1151,14 @@ void *dasd_monitor_thread (void *ctx)
 	struct timespec tmo;
 	int rc, aio_timeout = 0, sig_timeout = checker_timeout;
 
-	dasd_monitor_get(dev);
+	device_monitor_get(dev);
 	/* Reset any stale ioctl flags */
 	dasd_timeout_ioctl(dev->device, 0);
 
 	dev->buf = NULL;
 	dev->fd = -1;
 	dev->aio_active = 0;
-	pthread_cleanup_push(dasd_monitor_cleanup, dev);
+	pthread_cleanup_push(device_monitor_cleanup, dev);
 	rc = dasd_setup_aio(dev);
 	if (rc) {
 		err("%s: setup async I/O failed with %d",
@@ -1321,12 +1321,12 @@ void *dasd_monitor_thread (void *ctx)
 	return ((void *)0);
 }
 
-static void monitor_dasd(struct device_monitor *dev)
+static void monitor_device(struct device_monitor *dev)
 {
 	int rc;
 	pthread_t thread;
 
-	dasd_monitor_get(dev);
+	device_monitor_get(dev);
 	pthread_mutex_lock(&dev->lock);
 	if (dev->running) {
 		/* check if thread is still alive */
@@ -1337,7 +1337,7 @@ static void monitor_dasd(struct device_monitor *dev)
 			/* Release the lock to avoid deadlocking */
 			thread = dev->thread;
 			pthread_mutex_unlock(&dev->lock);
-			dasd_monitor_put(dev);
+			device_monitor_put(dev);
 			pthread_kill(thread, SIGHUP);
 			return;
 		}
@@ -1354,7 +1354,7 @@ static void monitor_dasd(struct device_monitor *dev)
 	dev->running = 1;
 	pthread_mutex_unlock(&dev->lock);
 	rc = pthread_create(&thread, &monitor_attr,
-			    dasd_monitor_thread, dev);
+			    device_monitor_thread, dev);
 	if (rc) {
 		pthread_mutex_lock(&dev->lock);
 		dev->running = 0;
@@ -1367,7 +1367,7 @@ static void monitor_dasd(struct device_monitor *dev)
 		dev->thread = thread;
 		pthread_mutex_unlock(&dev->lock);
 	}
-	dasd_monitor_put(dev);
+	device_monitor_put(dev);
 }
 
 static void add_component(struct md_monitor *md, struct device_monitor *dev,
@@ -1716,7 +1716,7 @@ static void fail_md_component(struct md_monitor *md_dev,
 	if (new_status != IN_SYNC)
 		fail_mirror(dev, new_status);
 
-	monitor_dasd(dev);
+	monitor_device(dev);
 }
 
 static void sync_md_component(struct md_monitor *md_dev,
@@ -1736,7 +1736,7 @@ static void sync_md_component(struct md_monitor *md_dev,
 	 */
 	dev->md_status = IN_SYNC;
 	pthread_mutex_unlock(&dev->lock);
-	monitor_dasd(dev);
+	monitor_device(dev);
 }
 
 static void remove_md_component(struct md_monitor *md_dev,
@@ -1842,7 +1842,7 @@ static void discover_md_components(struct md_monitor *md)
 			found->md_index = i;
 			found->md_slot = info.raid_disk;
 			list_move(&found->siblings, &md->children);
-			monitor_dasd(found);
+			monitor_device(found);
 			found = NULL;
 			continue;
 		}
@@ -1879,7 +1879,7 @@ static void discover_md_components(struct md_monitor *md)
 		add_component(md, found, udev_device_get_sysname(raid_dev));
 		udev_device_unref(raid_dev);
 		list_add(&found->siblings, &md->children);
-		monitor_dasd(found);
+		monitor_device(found);
 		found = NULL;
 	}
 	pthread_mutex_unlock(&md->device_lock);
@@ -3338,7 +3338,8 @@ out:
 		info("%s: detached '%s'", found_dev->dev_name,
 		     udev_device_get_devpath(found_dev->device));
 		list_del_init(&found_dev->entry);
-		dasd_monitor_put(found_dev);
+		if (found_dev->device)
+			device_monitor_put(found_dev);
 	}
 	unlock_device_list();
 
