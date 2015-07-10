@@ -41,6 +41,7 @@ enum device_io_status {
 	IO_FAILED,
 	IO_PENDING,
 	IO_TIMEOUT,
+	IO_RETRY,
 	IO_RESERVED
 };
 

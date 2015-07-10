@@ -158,6 +158,7 @@ struct device_io_state_t {
 	{ IO_FAILED, 'W', "I/O failed"},
 	{ IO_PENDING, 'R', "I/O pending"},
 	{ IO_TIMEOUT, 'T', "I/O timeout"},
+	{ IO_RETRY, 'I', "I/O retry"},
 	{ IO_RESERVED, 0, NULL }
 };
 
@@ -933,6 +934,7 @@ void *device_monitor_thread (void *ctx)
 			 * decisions yet. Wait until we got the I/O
 			 * results.
 			 */
+			info("%s: path checker busy, retry", dev->dev_name);
 			aio_timeout = monitor_timeout;
 			dev->io_status = io_status;
 			continue;
@@ -1357,7 +1359,8 @@ static void reset_mirror(struct device_monitor *dev)
 		if (tmp->md_status == RECOVERY)
 			continue;
 		if (tmp->io_status == IO_UNKNOWN ||
-		    tmp->io_status == IO_FAILED)
+		    tmp->io_status == IO_FAILED ||
+		    tmp->io_status == IO_RETRY)
 			continue;
 		if (this_side != side)
 			ready_devices++;

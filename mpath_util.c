@@ -223,12 +223,18 @@ enum device_io_status mpath_check_status(struct device_monitor *dev,
 		io_status = IO_OK;
 		goto out;
 	}
+	if (!eptr) {
+		io_status = IO_ERROR;
+		goto out;
+	}
+	ptr = eptr;
 	while (ptr && ptr < reply + len && *ptr == ' ') ptr++;
-	if (!strcmp(ptr, "off"))
+	if (!strncmp(ptr, "off", 3))
 		io_status = IO_FAILED;
 	else if (!*ptr == '-')
 		io_status = IO_PENDING;
-
+	else
+		io_status = IO_RETRY;
 out:
 	free(reply);
 	return io_status;
