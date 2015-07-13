@@ -195,7 +195,7 @@ The possible states for \fIMonitorStatus\fR are:
 Unknown
 .TP
 \fBX\fR
-Internal error
+MD will be stopped
 .TP
 \fBA\fR
 I/O ok
@@ -203,16 +203,25 @@ I/O ok
 \fBW\fR
 I/O failed
 .TP
-\fBR\fR
+\fBP\fR
 I/O pending
 .TP
 \fBT\fR
 I/O timeout
+\fB-\fR
+Removed
+\fBS\fR
+Spare
+\fBR\fR
+Recovery
 .PP
-\fBR\fR and \fBT\fR describe the same condition, ie I/O has been
-stalled. The state will switch from \fBR\fR to \fBT\fR when the
+\fBP\fR and \fBT\fR describe the same condition, ie I/O has been
+stalled. The state will switch from \fBP\fR to \fBT\fR when the
 timeout as set by \fIfailfast_expires\fR * \fIfailfast_retries\fR
-seconds has expired.
+seconds has expired. \fB-\fR, \fBS\fR, and \fBR\fR, are steps MD
+takes to recover a device; first the device will be removed, then
+it will be re-added as a 'spare' device, and then recovery will be
+starting for re-adding the spare device into the MD array.
 
 .SH THEORY OF OPERATION
 \fBmd_monitor\fR sets up a path checker thread for each MD component
