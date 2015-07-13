@@ -31,6 +31,7 @@ enum md_rdev_status {
 			 * 'remove' and 're-add' has been sent */
 	PENDING,	/* device is in_sync, 'faulty' has been send */
 	BLOCKED,	/* md is blocked */
+	STOPPED,	/* md should be stopped */
 	RESERVED,	/* end marker */
 };
 

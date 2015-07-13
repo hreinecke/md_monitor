@@ -124,6 +124,7 @@ struct md_rdev_state_t {
 	{ REMOVED, '-', "removed"},
 	{ PENDING, 'P', "pending"},
 	{ BLOCKED, 'B', "blocked"},
+	{ STOPPED, 'X', "stopped"},
 	{ RESERVED, 0, NULL }
 };
 
@@ -982,6 +983,7 @@ void *device_monitor_thread (void *ctx)
 					pthread_mutex_lock(&dev->lock);
 					dev->running = 0;
 					pthread_mutex_unlock(&dev->lock);
+					new_status = STOPPED;
 				}
 				break;
 			case RECOVERY:
@@ -998,7 +1000,7 @@ void *device_monitor_thread (void *ctx)
 		info("%s: state %s / %s",
 		     dev->dev_name, md_rdev_print_state(new_status),
 		     device_io_print_state(io_status));
-		if (!sig_timeout) {
+		if (new_status == STOPPED) {
 			pthread_mutex_lock(&dev->lock);
 			break;
 		}
