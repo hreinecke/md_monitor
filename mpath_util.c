@@ -24,12 +24,14 @@
 #include <errno.h>
 #include <libaio.h>
 #include <limits.h>
+#include <pthread.h>
 
 #include "list.h"
 #include "md_debug.h"
 #include "md_monitor.h"
 
 #define DEFAULT_SOCKET "/org/kernel/linux/storage/multipathd"
+pthread_t mpath_thread;
 
 /*
  * connect to a unix domain socket
@@ -293,4 +295,177 @@ int mpath_modify_queueing(struct device_monitor *dev, int enable, int timeout)
 
 	free(reply);
 	return ret;
+}
+
+ssize_t mpath_status(char **reply, int timeout)
+{
+	int fd;
+	char inbuf[64];
+	size_t len;
+	int ret;
+
+	fd = socket_connect(DEFAULT_SOCKET);
+	if (fd < 0) {
+		warn("mpath: failed to connect to multipathd: %m");
+		return -errno;
+	}
+	sprintf(inbuf, "show maps format \"%%n %%N %%Q\"");
+	ret = send_packet(fd, inbuf, strlen(inbuf) + 1);
+	if (ret != 0) {
+		warn("mpath: cannot send command to multipathd: %s",
+		     strerror(-ret));
+		close(fd);
+		return ret;
+	}
+	ret = recv_packet(fd, reply, &len, timeout);
+	close(fd);
+	if (ret < 0) {
+		warn("mpath: error receiving packet from multipathd: %s",
+		     strerror(-ret));
+		return ret;
+	}
+	return len;
+}
+
+void *mpath_status_thread (void *ctx)
+{
+	int sig_timeout = *(unsigned long *)ctx;
+	struct device_monitor *dev;
+	enum device_io_status io_status;
+	enum md_rdev_status md_status, new_status;
+	struct timespec tmo;
+	ssize_t len;
+	char *reply = NULL, *ptr, *eptr;
+	char *devname = NULL;
+	unsigned long num_paths;
+	int rc;
+
+	while (1) {
+		len = mpath_status(&reply, sig_timeout);
+		if (len < 0) {
+			warn("error while reading multipath status, exit");
+			break;
+		}
+		if (len == 0) {
+			warn("timeout while reading multipath status, retry");
+			free(reply);
+			continue;
+		}
+		ptr = reply;
+		ptr = strchr(reply, '\n');
+		if (!ptr) {
+			warn("Parse error in multipath header '%s'", reply);
+			break;
+		}
+		ptr++;
+		while (ptr && ptr < reply + len && strlen(ptr)) {
+			devname = ptr;
+			ptr = strchr(devname, ' ');
+			if (!ptr) {
+				warn("Parse error in multipath response '%s'",
+				     devname);
+				break;
+			}
+			*ptr = '\0';
+			ptr++;
+			while (*ptr == ' ' && ptr < reply + len)
+				ptr++;
+			if (ptr == reply + len) {
+				ptr = '\0';
+				len --;
+			}
+			num_paths = strtoul(ptr, &eptr, 10);
+			if (ptr == eptr || num_paths == ULONG_MAX) {
+				warn("%s: invalid number of paths, reply '%s'",
+				     devname, ptr);
+				ptr = strchr(ptr, '\n');
+				if (ptr)
+					ptr++;
+				continue;
+			}
+			if (num_paths > 0) {
+				io_status = IO_OK;
+			} else if (!eptr) {
+				io_status = IO_ERROR;
+			} else {
+				ptr = eptr;
+				while (ptr && ptr < reply + len &&
+				       *ptr == ' ') ptr++;
+				if (!strncmp(ptr, "off", 3))
+					io_status = IO_FAILED;
+				else if (!*ptr == '-')
+					io_status = IO_PENDING;
+				else
+					io_status = IO_RETRY;
+			}
+			ptr = strchr(ptr, '\n');
+			if (ptr)
+				ptr++;
+#if 0
+			info("mpath: parser dev %s paths %d status %s next %s",
+			     devname, num_paths,
+			     device_io_print_state(io_status), ptr);
+#endif
+			dev = lookup_device_mdname(devname);
+			if (!dev) {
+				continue;
+			}
+			warn("%s: update status", devname);
+			md_status = md_rdev_check_state(dev);
+			if (md_status == UNKNOWN) {
+				/* array has been stopped */
+				continue;
+			}
+			/* Write status back */
+			pthread_mutex_lock(&dev->lock);
+			new_status = md_rdev_update_state(dev, md_status);
+			dev->io_status = io_status;
+			pthread_cond_signal(&dev->io_cond);
+			pthread_mutex_unlock(&dev->lock);
+			new_status = device_monitor_update(dev, io_status,
+							   new_status);
+			info("%s: state %s / %s",
+			     dev->dev_name, md_rdev_print_state(new_status),
+			     device_io_print_state(io_status));
+		}
+		free(reply);
+		tmo.tv_sec = sig_timeout;
+		tmo.tv_nsec = 0;
+		info("mpath: waiting %ld seconds ...", (long)tmo.tv_sec);
+		rc = sigtimedwait(&thread_sigmask, NULL, &tmo);
+		if (rc < 0) {
+			if (errno == EINTR) {
+				info("mpath: ignore signal interrupt");
+			} else if (errno != EAGAIN) {
+				info("mpath: wait failed: %s", strerror(errno));
+				break;
+			}
+		} else {
+			info("mpath: wait interrupted");
+		}
+	}
+	return ((void *)0);
+}
+
+int start_mpath_check(unsigned long timeout)
+{
+	int rc;
+
+	info("Start mpath status thread");
+
+	rc = pthread_create(&mpath_thread, NULL, mpath_status_thread, &timeout);
+	if (rc) {
+		err("Failed to start mpath update thread: %m");
+		mpath_thread = 0;
+	}
+	return rc;
+}
+
+void stop_mpath_check(void)
+{
+	if (mpath_thread) {
+		info("Stop mpath status thread");
+		pthread_cancel(mpath_thread);
+		pthread_join(mpath_thread, NULL);
+	}
 }

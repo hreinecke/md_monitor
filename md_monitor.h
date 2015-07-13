@@ -102,6 +102,17 @@ struct device_monitor {
 	unsigned char *buf;
 };
 
+extern sigset_t thread_sigmask;
 extern void sig_handler(int signum);
+extern struct device_monitor *lookup_device_mdname(const char *devname);
+extern enum md_rdev_status md_rdev_check_state(struct device_monitor *dev);
+extern enum md_rdev_status md_rdev_update_state(struct device_monitor *dev,
+						enum md_rdev_status md_status);
+extern enum md_rdev_status
+device_monitor_update(struct device_monitor *dev,
+		      enum device_io_status io_status,
+		      enum md_rdev_status new_status);
+extern char *md_rdev_print_state(enum md_rdev_status state);
+extern char *device_io_print_state(enum device_io_status state);
 
 #endif /* _MD_MONITOR_H */

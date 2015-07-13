@@ -23,5 +23,7 @@
 enum device_io_status mpath_check_status(struct device_monitor *dev,
 					 int timeout);
 int mpath_modify_queueing(struct device_monitor *dev, int enable, int timeout);
+int start_mpath_check(unsigned long);
+void stop_mpath_check(void);
 
 #endif /* _MPATH_UTIL_H */

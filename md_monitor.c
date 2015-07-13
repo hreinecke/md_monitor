@@ -74,7 +74,7 @@ static int udev_exit;
 static int monitor_timeout;
 static int failfast_timeout = 5;
 static int failfast_retries = 2;
-static sigset_t thread_sigmask;
+sigset_t thread_sigmask;
 static int daemonize_monitor;
 static int log_priority = LOG_INFO;
 static char logname[MD_NAMELEN];
@@ -128,7 +128,7 @@ struct md_rdev_state_t {
 	{ RESERVED, 0, NULL }
 };
 
-const char *md_rdev_print_state(enum md_rdev_status state)
+char *md_rdev_print_state(enum md_rdev_status state)
 {
 	struct md_rdev_state_t *md_rdev_state_ptr = md_rdev_state_list;
 
@@ -163,7 +163,7 @@ struct device_io_state_t {
 	{ IO_RESERVED, 0, NULL }
 };
 
-const char *device_io_print_state(enum device_io_status state)
+char *device_io_print_state(enum device_io_status state)
 {
 	struct device_io_state_t *device_io_state_ptr = device_io_state_list;
 
@@ -376,6 +376,24 @@ static struct md_monitor *lookup_md_new(struct udev_device *md_dev)
 out_unlock:
 	pthread_mutex_unlock(&md_lock);
 	return md;
+}
+
+struct device_monitor *lookup_device_mdname(const char *devname)
+{
+	struct device_monitor *tmp, *found = NULL;
+
+	lock_device_list();
+	list_for_each_entry(tmp, &device_list, entry) {
+		if (!strlen(tmp->md_name))
+			continue;
+		if (!strcmp(tmp->md_name, devname)) {
+			found = tmp;
+			break;
+		}
+	}
+	unlock_device_list();
+
+	return found;
 }
 
 static struct device_monitor *device_monitor_get(struct device_monitor *dev)
@@ -838,8 +856,6 @@ void device_monitor_cleanup(void *data)
 		free(dev->buf);
 		dev->buf = NULL;
 	}
-	if (strncmp(dev->dev_name, "dasd", 4))
-		 mpath_modify_queueing(dev, 1, monitor_timeout);
 
 	info("%s: shutdown device monitor thread", dev->dev_name);
 	pthread_mutex_lock(&dev->lock);
@@ -889,14 +905,13 @@ device_monitor_update(struct device_monitor *dev,
 	} else {
 		switch (new_status) {
 		case IN_SYNC:
-			if (stop_on_sync) {
+			pthread_mutex_lock(&dev->lock);
+			if (dev->running && stop_on_sync) {
 				info("%s: path ok, stopping monitor",
 				     dev->dev_name);
-				pthread_mutex_lock(&dev->lock);
 				dev->running = 0;
-				pthread_mutex_unlock(&dev->lock);
-				new_status = STOPPED;
 			}
+			pthread_mutex_unlock(&dev->lock);
 			break;
 		case RECOVERY:
 		case BLOCKED:
@@ -922,9 +937,8 @@ void *device_monitor_thread (void *ctx)
 	int rc, aio_timeout = 0, sig_timeout = checker_timeout;
 
 	device_monitor_get(dev);
-	if (!strncmp(dev->dev_name, "dasd", 4))
-		/* Reset any stale ioctl flags */
-		dasd_timeout_ioctl(dev->device, 0);
+	/* Reset any stale ioctl flags */
+	dasd_timeout_ioctl(dev->device, 0);
 
 	pthread_cleanup_push(device_monitor_cleanup, dev);
 	rc = dasd_setup_aio(dev);
@@ -945,10 +959,7 @@ void *device_monitor_thread (void *ctx)
 		dbg("%s: check aio state, timeout %d secs",
 		    dev->dev_name, aio_timeout);
 		pthread_mutex_unlock(&dev->lock);
-		if (!strncmp(dev->dev_name, "dasd", 4))
-			io_status = dasd_check_aio(dev, aio_timeout);
-		else
-			io_status = mpath_check_status(dev, monitor_timeout);
+		io_status = dasd_check_aio(dev, aio_timeout);
 		if (io_status == IO_ERROR) {
 			warn("%s: error during aio submission, exit",
 			     dev->dev_name);
@@ -1046,6 +1057,9 @@ static void monitor_device(struct device_monitor *dev)
 	int rc;
 	pthread_t thread;
 
+	if (strncmp(dev->dev_name, "dasd", 4))
+		return;
+
 	device_monitor_get(dev);
 	pthread_mutex_lock(&dev->lock);
 	if (dev->running) {
@@ -1102,14 +1116,14 @@ static void add_component(struct md_monitor *md, struct device_monitor *dev,
 	if (md_namelen > MD_NAMELEN)
 		md_namelen = MD_NAMELEN;
 
-	info("%s: Add component (%d/%d)", dev->dev_name,
+	info("%s: Add component %s (%d/%d)", dev->dev_name, md_name,
 	     dev->md_index, dev->md_slot);
 	if (!dev->parent) {
 		udev_device_ref(md->device);
 		dev->parent = md->device;
 	}
+	memset(dev->md_name, 0x0, MD_NAMELEN);
 	strncpy(dev->md_name, md_name, md_namelen);
-	dev->md_name[MD_NAMELEN - 1] = '\0';
 	if (dev->md_index < 0)
 		md_rdev_update_index(md, dev);
 	if (!strncmp(dev->dev_name, "dasd", 4)) {
@@ -1603,8 +1617,8 @@ static void discover_md_components(struct md_monitor *md)
 		if (!strncmp(sysname, "dm-", 3))
 			sysname = udev_device_get_sysattr_value(raid_dev,
 								"dm/name");
-		info("%s: Start monitoring %s", mdname, sysname);
 		add_component(md, found, sysname);
+		info("%s: Start monitoring %s", mdname, found->md_name);
 		udev_device_unref(raid_dev);
 		list_add(&found->siblings, &md->children);
 		monitor_device(found);
@@ -2998,6 +3012,9 @@ int main(int argc, char *argv[])
 	if (!mdx)
 		goto out;
 
+	if (start_mpath_check(checker_timeout) < 0)
+		goto out;
+
 	/* Discover existing devices */
 	discover_devices(udev);
 
@@ -3084,6 +3101,8 @@ out:
 		pthread_join(cli->thread, NULL);
 	}
 	free(cli);
+
+	stop_mpath_check();
 
 	if (mdx && mdx->thread) {
 		pthread_cancel(mdx->thread);
