@@ -19,9 +19,23 @@ function online_dasd() {
     fi
 }
 
+function online_scsi() {
+    local sdev=$1
+
+    if ! echo running > /sys/block/$sdev/device/state ; then
+	error_exit "Cannot set device $sdev online"
+    fi
+}
+
+function readd_mpath() {
+    local dev=${1##*/}
+
+    echo add > /sys/block/${dev}/uevent
+}
+
 stop_md $MD_NUM
 
-activate_dasds
+activate_devices
 
 clear_metadata
 
@@ -57,12 +71,27 @@ if ! mdadm --manage /dev/${MD_NUM} --remove ${DEVICES_LEFT[@]} ; then
     error_exit "Cannot fail $d in MD array $MD_NUM"
 fi
 wait_md ${MD_NUM}
-for devno in $DEVNOS_LEFT ; do
-    if ! echo 0 > /sys/bus/ccw/devices/$devno/online ; then
-	error_exit "Cannot set device $devno offline"
-    fi
-    push_recovery_fn "online_dasd $devno"
-done
+if [ -n "$DEVNOS_LEFT" ] ; then
+    for devno in $DEVNOS_LEFT ; do
+	if ! echo 0 > /sys/bus/ccw/devices/$devno/online ; then
+	    error_exit "Cannot set device $devno offline"
+	fi
+	push_recovery_fn "online_dasd $devno"
+    done
+else
+    # DASD devices will send an event when moving to 'running',
+    # SCSI devices don't. So we need to trigger this manually.
+    for mpath in ${DEVICES_LEFT[@]} ; do
+	push_recovery_fn "readd_mpath $mpath"
+    done
+    for sdev in ${SDEVS_LEFT[@]} ; do
+	if ! echo offline > /sys/block/$sdev/device/state ; then
+	    error_exit "Cannot set device $sdev offline"
+	fi
+	push_recovery_fn "online_scsi $sdev"
+    done
+fi
+
 echo "Write test file 2 ..."
 dd if=/dev/zero of=/mnt/testfile2 bs=4096 count=1024
 sleep 6
@@ -119,12 +148,26 @@ if ! mdadm --manage /dev/${MD_NUM} --remove ${DEVICES_RIGHT[@]} ; then
     error_exit "Cannot remove $d in MD array $MD_NUM"
 fi
 wait_md ${MD_NUM}
-for devno in $DEVNOS_RIGHT ; do
-    if ! echo 0 > /sys/bus/ccw/devices/$devno/online ; then
-	error_exit "Cannot set device $devno offline"
-    fi
-    push_recovery_fn "online_dasd $devno"
-done
+if [ -n "$DEVNOS_RIGHT" ] ; then
+    for devno in $DEVNOS_RIGHT ; do
+	if ! echo 0 > /sys/bus/ccw/devices/$devno/online ; then
+	    error_exit "Cannot set device $devno offline"
+	fi
+	push_recovery_fn "online_dasd $devno"
+    done
+else
+    # DASD devices will send an event when moving to 'running',
+    # SCSI devices don't. So we need to trigger this manually.
+    for mpath in ${DEVICES_RIGHT[@]} ; do
+	push_recovery_fn "readd_mpath $mpath"
+    done
+    for sdev in ${SDEVS_RIGHT[@]} ; do
+	if ! echo offline > /sys/block/$sdev/device/state ; then
+	    error_exit "Cannot set device $sdev offline"
+	fi
+	push_recovery_fn "online_scsi $sdev"
+    done
+fi
 echo "Write test file 3 ..."
 dd if=/dev/zero of=/mnt/testfile3 bs=4096 count=1024
 sleep 5
