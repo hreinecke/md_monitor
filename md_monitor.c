@@ -898,6 +898,8 @@ device_monitor_update(struct device_monitor *dev,
 		case TIMEOUT:
 			fail_mirror(dev, new_status);
 			break;
+		case UNKNOWN:
+			break;
 		default:
 			warn("%s: Invalid array state", dev->dev_name);
 			break;
