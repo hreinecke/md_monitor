@@ -309,7 +309,7 @@ ssize_t mpath_status(char **reply, int timeout)
 		warn("mpath: failed to connect to multipathd: %m");
 		return -errno;
 	}
-	sprintf(inbuf, "show maps format \"%%n %%N %%Q\"");
+	sprintf(inbuf, "show maps format \"%%d %%N %%Q\"");
 	ret = send_packet(fd, inbuf, strlen(inbuf) + 1);
 	if (ret != 0) {
 		warn("mpath: cannot send command to multipathd: %s",
@@ -406,7 +406,7 @@ void *mpath_status_thread (void *ctx)
 			     devname, num_paths,
 			     device_io_print_state(io_status), ptr);
 #endif
-			dev = lookup_device_mdname(devname);
+			dev = lookup_device_devname(devname);
 			if (!dev) {
 				continue;
 			}

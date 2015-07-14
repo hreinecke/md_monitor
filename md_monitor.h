@@ -104,7 +104,7 @@ struct device_monitor {
 
 extern sigset_t thread_sigmask;
 extern void sig_handler(int signum);
-extern struct device_monitor *lookup_device_mdname(const char *devname);
+extern struct device_monitor *lookup_device_devname(const char *devname);
 extern enum md_rdev_status md_rdev_check_state(struct device_monitor *dev);
 extern enum md_rdev_status md_rdev_update_state(struct device_monitor *dev,
 						enum md_rdev_status md_status);

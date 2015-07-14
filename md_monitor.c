@@ -378,15 +378,15 @@ out_unlock:
 	return md;
 }
 
-struct device_monitor *lookup_device_mdname(const char *devname)
+struct device_monitor *lookup_device_devname(const char *devname)
 {
 	struct device_monitor *tmp, *found = NULL;
 
 	lock_device_list();
 	list_for_each_entry(tmp, &device_list, entry) {
-		if (!strlen(tmp->md_name))
+		if (!strlen(tmp->dev_name))
 			continue;
-		if (!strcmp(tmp->md_name, devname)) {
+		if (!strcmp(tmp->dev_name, devname)) {
 			found = tmp;
 			break;
 		}
