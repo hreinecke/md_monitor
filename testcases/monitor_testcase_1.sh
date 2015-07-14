@@ -12,7 +12,7 @@ MD_NAME="testcase1"
 
 stop_md $MD_NUM
 
-activate_dasds
+activate_devices
 
 clear_metadata
 

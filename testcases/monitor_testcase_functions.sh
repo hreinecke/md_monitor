@@ -54,6 +54,10 @@ function start_md() {
 	n=$(expr $n + 1)
     done
 
+    if [ -f /usr/lib/systemd/system/mdmonitor.service ] ; then
+	echo "Stopping mdmonitor"
+	systemctl stop mdmonitor
+    fi
     echo "Create MD array ..."
     mdadm --create ${MD_DEVNAME} --name=${MD_NAME} \
 	--raid-devices=${MD_DEVICES} ${MD_ARGS} --level=raid10 \
@@ -61,6 +65,7 @@ function start_md() {
 	|| error_exit "Cannot create MD array."
 
     mdadm --wait ${MD_DEVNAME} || true
+
     START_LOG="/tmp/monitor_${MD_NAME}_mdstat_start.log"
     mdadm --detail ${MD_DEVNAME} | sed '/Update Time/D;/Events/D' | tee ${START_LOG}
     echo "POLICY action=re-add" > /etc/mdadm.conf
@@ -290,8 +295,73 @@ function activate_dasds() {
     done
 }
 
+function activate_scsi() {
+    local devno_max=$1
+    local devno;
+    local dasd;
+    local i=0
+
+    hostname=$(hostname)
+    if [ "$hostname" = "elnath" ] ; then
+	SCSIID_LEFT="3600a098032466955593f416531744a39 3600a098032466955593f416531744a41"
+	SCSIID_RIGHT="3600a098032466955593f41653174496c 3600a098032466955593f416531744a2d"
+    else
+	error_exit "Cannot determine SCSI layout for $hostname"
+    fi
+
+    # Use 8 DASDs per side per default
+    if [ -z "$devno_max" ] ; then
+	devno_max=8
+    fi
+    for scsiid in ${SCSIID_LEFT} ; do
+	paths=$(multipathd -k"show map $scsiid topology" | \
+	        sed -n 's/.*[0-9]:[0-9]:[0-9]:[0-9] \(sd[a-z]*\) .*/\1/p')
+	for path in ${paths} ; do
+	    read state < /sys/block/$path/device/state
+	    if [ "$state" != "running" ] ; then
+		error_exit "SCSI device $path in state $state, cannot continue"
+	    fi
+	    mpath_state=$(multipathd -k'show paths format "%d %t %T"' | sed -n "s/$path \(.*\)/\1/p")
+	    if [ "$mpath_state" != "active ready " ] ; then
+		error_exit "Multipath device $path in state $mpath_state, cannot continue"
+	    fi
+	    SDEVS_LEFT+=("${path}")
+	done
+	mpath_dev=$(multipathd -k'show multipaths' | sed -n "s/.* \(dm-[0-9]*\) *$scsiid/\1/p")
+	DEVICES_LEFT+=("/dev/$mpath_dev")
+    done
+
+    for scsiid in ${SCSIID_RIGHT} ; do
+	paths=$(multipathd -k"show map $scsiid topology" | \
+	        sed -n 's/.*[0-9]:[0-9]:[0-9]:[0-9] \(sd[a-z]*\) .*/\1/p')
+	for path in ${paths} ; do
+	    read state < /sys/block/$path/device/state
+	    if [ "$state" != "running" ] ; then
+		error_exit "SCSI device $path in state $state, cannot continue"
+	    fi
+	    mpath_state=$(multipathd -k'show paths format "%d %t %T"' | sed -n "s/$path \(.*\)/\1/p")
+	    if [ "$mpath_state" != "active ready " ] ; then
+		error_exit "Multipath device $path in state $mpath_state, cannot continue"
+	    fi
+	    SDEVS_RIGHT+=("$path")
+	done
+	mpath_dev=$(multipathd -k'show multipaths' | sed -n "s/.* \(dm-[0-9]*\) *$scsiid/\1/p")
+	DEVICES_RIGHT+=("/dev/$mpath_dev")
+    done
+}
+
+function activate_devices()
+{
+    hostname=$(hostname)
+    if [ "$hostname" = "elnath" ] ; then
+	activate_scsi
+    else
+	activate_dasd
+    fi
+}
+
 function clear_metadata() {
-    echo -n "Clear DASD Metadata ..."
+    echo -n "Clear MD Metadata ..."
     MD_DEVNUM=0
     for dev in ${DEVICES_LEFT[@]} ${DEVICES_RIGHT[@]} ; do
 	[ -b $dev ] || continue
@@ -379,8 +449,12 @@ function reset_devices() {
     local dasd
     local devno
 
-    for dasd in ${DEVICES_LEFT[@]} ${DEVICES_RIGHT[@]} ; do
-	setdasd -q 0 -d /dev/${dasd} || true
+    for dev in ${DEVICES_LEFT[@]} ${DEVICES_RIGHT[@]} ; do
+	case "$dev" in
+	    dasd*)
+		setdasd -q 0 -d /dev/${dev} || true
+		;;
+	esac
     done
 
     for fn in "${RECOVERY_HOOKS[@]}"; do
