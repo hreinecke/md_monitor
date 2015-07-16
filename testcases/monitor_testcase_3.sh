@@ -115,18 +115,23 @@ done
 # first, and then check for sync.
 #
 echo "Wait for md_monitor to pick up changes"
-sleeptime=0
-while [ $sleeptime -lt $MONITOR_TIMEOUT ] ; do
+starttime=$(date +%s)
+runtime=$starttime
+endtime=$(date +%s --date="+ $MONITOR_TIMEOUT sec")
+while [ $runtime -lt $endtime ] ; do
     MD_LOG2=$(md_monitor -c"MonitorStatus:/dev/${MD_NUM}")
     if [ "${MD_LOG1}" = "${MD_LOG2}" ] ; then
 	break;
     fi
-    (( sleeptime ++ )) || true
     sleep 1
+    runtime=$(date +%s)
 done
-if [ $sleeptime -ge $MONITOR_TIMEOUT ] ; then
+elapsed=$(( $runtime - $starttime ))
+if [ $runtime -ge $endtime ] ; then
     echo "Monitor status does not match: is ${MD_LOG2} was ${MD_LOG1}"
-    error_exit "md_monitor did not pick up changes after $sleeptime seconds"
+    error_exit "md_monitor did not pick up changes after $elapsed seconds"
+else
+    echo "md_monitor picked up changes after $elapsed seconds"
 fi
 if ! wait_for_sync ${MD_NUM} ; then
     md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
@@ -181,18 +186,23 @@ while true ; do
 done
 
 echo "Wait for md_monitor to pick up changes"
-sleeptime=0
-while [ $sleeptime -lt $MONITOR_TIMEOUT ] ; do
+starttime=$(date +%s)
+runtime=$starttime
+endtime=$(date +%s --date="+ $MONITOR_TIMEOUT sec")
+while [ $runtime -lt $endtime ] ; do
     MD_LOG3=$(md_monitor -c"MonitorStatus:/dev/${MD_NUM}")
     if [ "${MD_LOG1}" = "${MD_LOG3}" ] ; then
 	break;
     fi
-    (( sleeptime ++ )) || true
     sleep 1
+    runtime=$(date +%s)
 done
-if [ $sleeptime -ge $MONITOR_TIMEOUT ] ; then
+elapsed=$(( $runtime - $starttime ))
+if [ $runtime -ge $endtime ] ; then
     echo "Monitor status does not match: is ${MD_LOG3} was ${MD_LOG1}"
-    error_exit "md_monitor did not pick up changes after $sleeptime seconds"
+    error_exit "md_monitor did not pick up changes after $elapsed seconds"
+else
+    echo "md_monitor picked up changes after $elapsed seconds"
 fi
 if ! wait_for_sync ${MD_NUM} ; then
     md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
