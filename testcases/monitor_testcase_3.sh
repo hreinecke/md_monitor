@@ -114,25 +114,10 @@ done
 # So wait for md_monitor to pick up the changes
 # first, and then check for sync.
 #
-echo "Wait for md_monitor to pick up changes"
-starttime=$(date +%s)
-runtime=$starttime
-endtime=$(date +%s --date="+ $MONITOR_TIMEOUT sec")
-while [ $runtime -lt $endtime ] ; do
-    MD_LOG2=$(md_monitor -c"MonitorStatus:/dev/${MD_NUM}")
-    if [ "${MD_LOG1}" = "${MD_LOG2}" ] ; then
-	break;
-    fi
-    sleep 1
-    runtime=$(date +%s)
-done
-elapsed=$(( $runtime - $starttime ))
-if [ $runtime -ge $endtime ] ; then
-    echo "Monitor status does not match: is ${MD_LOG2} was ${MD_LOG1}"
-    error_exit "md_monitor did not pick up changes after $elapsed seconds"
-else
-    echo "md_monitor picked up changes after $elapsed seconds"
+if ! wait_for_monitor $MD_NUM $MD_LOG1 $MONITOR_TIMEOUT ; then
+    error_exit "md_monitor did not pick up changes"
 fi
+
 if ! wait_for_sync ${MD_NUM} ; then
     md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
     error_exit "Failed to activate first half"

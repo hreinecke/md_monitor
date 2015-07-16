@@ -579,3 +579,32 @@ function wait_for_sync () {
   let ELAPSED_TIME=`date +%s`-$START_TIME || true
   echo "sync finished after $ELAPSED_TIME secs";
 }
+
+function wait_for_monitor() {
+    local MD_NUM=$1
+    local oldstatus=$2
+    local timeout=$3
+    local newstatus
+
+    echo "Wait for md_monitor to pick up changes"
+    starttime=$(date +%s)
+    runtime=$starttime
+    endtime=$(date +%s --date="+ $timeout sec")
+    while [ $runtime -lt $endtime ] ; do
+	newstatus=$(md_monitor -c"MonitorStatus:/dev/${MD_NUM}")
+	if [ "$oldstatus" = "$newstatus" ] ; then
+	    break;
+	fi
+	sleep 1
+	runtime=$(date +%s)
+    done
+    elapsed=$(( $runtime - $starttime ))
+
+    if [ $runtime -ge $endtime ] ; then
+	echo "Monitor status does not match: is ${newstatus} was ${oldstatus}"
+	return 1
+    else
+	echo "md_monitor picked up changes after $elapsed seconds"
+    fi
+    true
+}
