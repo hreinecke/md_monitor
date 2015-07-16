@@ -12,7 +12,7 @@ MD_NAME="testcase10"
 
 stop_md $MD_NUM
 
-activate_dasds
+activate_devices
 
 clear_metadata
 
@@ -64,18 +64,16 @@ for d in ${DEVICES_LEFT[0]} ; do
     fi
 done
 mdadm --detail /dev/${MD_NUM}
+echo "Wait for mdadm to complete operation"
+starttime=$(date +%s)
 wait_md ${MD_NUM}
-MD_TIMEOUT=15
-wait_time=0
-while [ $wait_time -lt $MD_TIMEOUT ] ; do
-    new_status=$(md_monitor -c "MonitorStatus:/dev/${MD_NUM}")
-    [ $new_status == $old_status ] && break
-    sleep 1
-    (( wait_time++ )) || true
-done
-if [ $wait_time -ge $MD_TIMEOUT ] ; then
+runtime=$(date +%s)
+elapsed=$(( $runtime - $starttime ))
+echo "mdadm completed after $elapsed seconds"
+if ! wait_for_monitor $MD_NUM $old_status $MD_TIMEOUT ; then
     error_exit "Monitor status hasn't changed for $MD_TIMEOUT seconds"
 fi
+newstatus=$(md_monitor -c"MonitorStatus:/dev/${MD_NUM}")
 echo "Monitor status: $new_status"
 mdadm --detail /dev/${MD_NUM}
 MD_LOG3="/tmp/monitor_${MD_NAME}_step3.log"
