@@ -210,7 +210,10 @@ enum device_io_status mpath_check_status(struct device_monitor *dev,
 	if (ret < 0) {
 		warn("%s: error receiving packet from multipathd: %s",
 		     dev->dev_name, strerror(-ret));
-		io_status = IO_ERROR;
+		if (ret == -ETIMEDOUT)
+			io_status = IO_TIMEOUT;
+		else
+			io_status = IO_ERROR;
 		goto out;
 	}
 	ptr = reply;
@@ -322,6 +325,8 @@ ssize_t mpath_status(char **reply, int timeout)
 	if (ret < 0) {
 		warn("mpath: error receiving packet from multipathd: %s",
 		     strerror(-ret));
+		if (ret == -ETIMEDOUT)
+			ret = 0;
 		return ret;
 	}
 	return len;
