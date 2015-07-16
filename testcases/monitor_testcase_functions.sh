@@ -165,6 +165,7 @@ function stop_md() {
 	    mdadm --stop /dev/$md
 	fi
     done
+    clear_metadata
     cp /var/log/messages /tmp/monitor_${MD_NAME}.log
     rm -f /etc/mdadm.conf
     rm -f /tmp/monitor_${MD_NAME}_step*.log
@@ -303,8 +304,8 @@ function activate_scsi() {
 
     hostname=$(hostname)
     if [ "$hostname" = "elnath" ] ; then
-	SCSIID_LEFT="3600a098032466955593f416531744a39 3600a098032466955593f416531744a41"
-	SCSIID_RIGHT="3600a098032466955593f41653174496c 3600a098032466955593f416531744a2d"
+	SCSIID_LEFT="3600a098032466955593f416531744a39 3600a098032466955593f416531744a41 3600a098032466955593f416531744a43 3600a098032466955593f416531744a45"
+	SCSIID_RIGHT="3600a098032466955593f41653174496c 3600a098032466955593f416531744a2d 3600a098032466955593f416531744a42 3600a098032466955593f416531744a44"
     else
 	error_exit "Cannot determine SCSI layout for $hostname"
     fi
@@ -365,10 +366,12 @@ function clear_metadata() {
     MD_DEVNUM=0
     for dev in ${DEVICES_LEFT[@]} ${DEVICES_RIGHT[@]} ; do
 	[ -b $dev ] || continue
+	mdadm --zero-superblock --force $dev > /dev/null 2>&1
 	dd if=/dev/zero of=${dev} bs=4096 count=4096 >/dev/null 2>&1
 	echo -n " $dev ..."
 	MD_DEVNUM=$(( $MD_DEVNUM + 1 ))
     done
+    echo " done"
 }
 
 function run_dd() {
