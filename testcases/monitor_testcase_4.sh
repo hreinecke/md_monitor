@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 # Testcase 4: Disk attach/detach
+#             (Disk online/offline for zFCP)
 #
 
 set -o errexit
@@ -24,15 +25,25 @@ function attach_dasd() {
     fi
 }
 
+function online_scsi() {
+    local sdev=$1
+
+    if ! echo running > /sys/block/$sdev/device/state ; then
+	error_exit "Cannot set device $sdev online"
+    fi
+}
+
 stop_md $MD_NUM
 
-activate_dasds
+activate_devices
 
 clear_metadata
 
-userid=$(vmcp q userid | cut -f 1 -d ' ')
-if [ -z "$userid" ] ; then
-    error_exit "This testcase can only run under z/VM"
+if [ -n "$DEVNOS_LEFT" ] ; then
+    userid=$(vmcp q userid | cut -f 1 -d ' ')
+    if [ -z "$userid" ] ; then
+	error_exit "This testcase can only run under z/VM"
+    fi
 fi
 
 ulimit -c unlimited
@@ -53,13 +64,23 @@ fi
 echo "$(date) Run I/O test"
 run_iotest /mnt;
 
-echo "$(date) Detach disk on first half ..."
-for devno in ${DEVNOS_LEFT} ; do
-    vmcp det ${devno##*.} || \
-	error_exit "Cannot detach device ${devno##*.}"
-    push_recovery_fn "attach_dasd $userid ${devno##*.}"
-    break;
-done
+if [ -n "$DEVNOS_LEFT" ] ; then
+    echo "$(date) Detach disk on first half ..."
+    for devno in ${DEVNOS_LEFT} ; do
+	vmcp det ${devno##*.} || \
+	    error_exit "Cannot detach device ${devno##*.}"
+	push_recovery_fn "attach_dasd $userid ${devno##*.}"
+	break;
+    done
+else
+    echo "$(date) setting first half offline ..."
+    for sdev in ${SDEVS_LEFT[@]} ; do
+	if ! echo offline > /sys/block/$sdev/device/state ; then
+	    error_exit "Cannot set device $sdev offline"
+	fi
+	push_recovery_fn "online_scsi $sdev"
+    done
+fi
 
 echo "$(date) Ok. Waiting for MD to pick up changes ..."
 # Wait for md_monitor to pick up changes
@@ -95,20 +116,22 @@ done
 echo "$(date) Ok. Waiting for MD to pick up changes ..."
 # Wait for md_monitor to pick up changes
 sleeptime=0
-num=${#DASDS_LEFT[@]}
+num=${#DEVICES_LEFT[@]}
 while [ $num -gt 0  ] ; do
     [ $sleeptime -ge $MONITOR_TIMEOUT ] && break
-    for d in ${DASDS_LEFT[@]} ; do
-	device=$(sed -n "s/${MD_NUM}.* \(${d}1\[[0-9]*\]\).*/\1/p" /proc/mdstat)
-	if [ "$device" ] ; then
+    for d in ${DEVICES_LEFT[@]} ; do
+	dev=${d##*/}
+	md_dev=$(sed -n "s/${MD_NUM}.* \(${dev}\[[0-9]*\]\).*/\1/p" /proc/mdstat)
+	if [ "$md_dev" ] ; then
 	    (( num -- )) || true
 	fi
     done
     [ $num -eq 0 ] && break
-    num=${#DASDS_LEFT[@]}
+    num=${#DEVICES_LEFT[@]}
     sleep 1
     (( sleeptime ++ )) || true
 done
+
 if [ $sleeptime -lt $MONITOR_TIMEOUT ] ; then
     echo "$(date) MD monitor picked up changes after $sleeptime seconds"
 else
@@ -132,12 +155,22 @@ if ! diff -u "${START_LOG}" "${MD_LOG1}" ; then
 fi
 
 if [ "$detach_other_half" ] ; then
-    echo "Detach disk on second half ..."
-    for devno in ${DEVNOS_RIGHT} ; do
-	vmcp det ${devno##*.}
-	push_recovery_fn "attach_dasd $userid ${devno##*.}"
-	break;
-    done
+    if [ -n "$DEVNOS_RIGHT" ] ; then
+	echo "Detach disk on second half ..."
+	for devno in ${DEVNOS_RIGHT} ; do
+	    vmcp det ${devno##*.}
+	    push_recovery_fn "attach_dasd $userid ${devno##*.}"
+	    break;
+	done
+    else
+	echo "$(date) setting second half offline ..."
+	for sdev in ${SDEVS_RIGHT[@]} ; do
+	    if ! echo offline > /sys/block/$sdev/device/state ; then
+		error_exit "Cannot set device $sdev offline"
+	    fi
+	    push_recovery_fn "online_scsi $sdev"
+	done
+    fi
 
     echo "$(date) Ok. Waiting for MD to pick up changes ..."
     sleeptime=0
@@ -171,17 +204,18 @@ if [ "$detach_other_half" ] ; then
     echo "$(date) Ok. Waiting for MD to pick up changes ..."
     # Wait for md_monitor to pick up changes
     sleeptime=0
-    num=${#DASDS_LEFT[@]}
+    num=${#DEVICES_RIGHT[@]}
     while [ $num -gt 0  ] ; do
 	[ $sleeptime -ge $MONITOR_TIMEOUT ] && break
-	for d in ${DASDS_LEFT[@]} ; do
-	    device=$(sed -n "s/${MD_NUM}.* \(${d}1\[[0-9]*\]\).*/\1/p" /proc/mdstat)
-	    if [ "$device" ] ; then
+	for d in ${DEVICES_RIGHT[@]} ; do
+	    dev=${d##*/}
+	    md_dev=$(sed -n "s/${MD_NUM}.* \(${dev}\[[0-9]*\]\).*/\1/p" /proc/mdstat)
+	    if [ "$md_dev" ] ; then
 		(( num -- )) || true
 	    fi
 	done
 	[ $num -eq 0 ] && break
-	num=${#DASDS_LEFT[@]}
+	num=${#DEVICES_RIGHT[@]}
 	sleep 1
 	(( sleeptime ++ )) || true
     done
