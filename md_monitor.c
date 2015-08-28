@@ -57,7 +57,7 @@
 #include "md_debug.h"
 #include "dasd_ioctl.h"
 
-const char version_str[] = "md_monitor version 5.2";
+const char version_str[] = "md_monitor version 5.3";
 
 enum md_rdev_status {
 	UNKNOWN,	/* Not checked */
