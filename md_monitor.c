@@ -54,6 +54,7 @@
 #include "list.h"
 #include "md_monitor.h"
 #include "md_debug.h"
+#include "mpath_util.h"
 #include "dasd_util.h"
 #include "dasd_ioctl.h"
 
@@ -288,7 +289,8 @@ static struct device_monitor * lookup_md_component(struct md_monitor *md_dev,
 
 	if (!devname)
 		return NULL;
-	if (strncmp(devname, "dasd", 4)) {
+	if (strncmp(devname, "dasd", 4) &&
+	    strncmp(devname, "dm-", 3)) {
 		lookup_symlinks = 1;
 	}
 	pthread_mutex_lock(&md_dev->status_lock);
@@ -421,7 +423,7 @@ static struct device_monitor *allocate_device(struct udev_device *udev_dev)
 		return NULL;
 	}
 	memset(dev, 0, sizeof(struct device_monitor));
-	dev->device = udev_device_get_parent(udev_dev);
+	dev->device = udev_dev;
 	dev->ref = 1;
 	dev->md_slot = -1;
 	dev->md_index = -1;
@@ -438,37 +440,51 @@ static struct device_monitor *allocate_device(struct udev_device *udev_dev)
 static void attach_device(struct udev_device *udev_dev)
 {
 	struct md_monitor *found_md = NULL;
-	struct udev_device *dasd_dev = NULL;
 	struct device_monitor *tmp, *found = NULL;
 	const char *devtype, *alias, *status;
 	const char *devname = udev_device_get_sysname(udev_dev);
 	char devpath[256];
 	DIR *dirp;
 	struct dirent *dirfd;
+	dev_t udev_devt, tmp_devt;
 
 	devtype = udev_device_get_devtype(udev_dev);
+	udev_devt = udev_device_get_devnum(udev_dev);
 	dbg("dev %s devtype %s", devname, devtype);
-	if (!devtype || !strncmp(devname, "dasd", 4)) {
-		/* Not a partition, ignore */
-		info("%s: not a partition, ignore", devname);
-		return;
-	}
-	dasd_dev = udev_device_get_parent(udev_dev);
-	status = udev_device_get_sysattr_value(dasd_dev, "status");
-	if (status && strcmp(status, "online")) {
-		/*
-		 * Device not online. The kernel will send out
-		 * an event once the device is online, so
-		 * we can safely skip it here.
-		 */
-		info("%s: device in state %s, ignore", devname, status);
-		return;
-	}
-	alias = udev_device_get_sysattr_value(dasd_dev, "alias");
-	if (alias && alias[0] == '1') {
-		/* Alias device, ignore */
-		info("%s: aliased device, ignore", devname);
-		return;
+	if (!strncmp(devname, "dasd", 4)) {
+		struct udev_device *dasd_dev;
+
+		if (!devtype || !strncmp(devtype, "disk", 4)) {
+			/* Not a partition, ignore */
+			info("%s: not a partition, ignore", devname);
+			return;
+		}
+		dasd_dev = udev_device_get_parent(udev_dev);
+		status = udev_device_get_sysattr_value(dasd_dev, "status");
+		if (status && strcmp(status, "online")) {
+			/*
+			 * Device not online. The kernel will send out
+			 * an event once the device is online, so
+			 * we can safely skip it here.
+			 */
+			info("%s: device in state %s, ignore", devname, status);
+			return;
+		}
+		alias = udev_device_get_sysattr_value(dasd_dev, "alias");
+		if (alias && alias[0] == '1') {
+			/* Alias device, ignore */
+			info("%s: aliased device, ignore", devname);
+			return;
+		}
+	} else if (!strncmp(devname, "dm-", 3)) {
+		const char *uuid;
+
+		uuid = udev_device_get_sysattr_value(udev_dev, "dm/uuid");
+		if (strncmp(uuid, "mpath-", 6)) {
+			info("%s: unhandled DM uuid '%s', ignore",
+			     devname, uuid);
+			return;
+		}
 	}
 	sprintf(devpath, "%s/holders",
 		udev_device_get_syspath(udev_dev));
@@ -485,7 +501,8 @@ static void attach_device(struct udev_device *udev_dev)
 	}
 	lock_device_list();
 	list_for_each_entry(tmp, &device_list, entry) {
-		if (!strcmp(tmp->dev_name, devname)) {
+		tmp_devt = udev_device_get_devnum(tmp->device);
+		if (tmp_devt == udev_devt) {
 			found = tmp;
 			break;
 		}
@@ -506,6 +523,9 @@ static void attach_device(struct udev_device *udev_dev)
 	}
 	unlock_device_list();
 	if (found_md) {
+		if (!strncmp(devname, "dm-", 3))
+			devname = udev_device_get_sysattr_value(udev_dev,
+								"dm/name");
 		add_component(found_md, found, devname);
 		pthread_mutex_lock(&found_md->device_lock);
 		if (list_empty(&found->siblings))
@@ -565,6 +585,7 @@ static void discover_devices(struct udev *udev)
 	device_enumerate = udev_enumerate_new(udev);
 	udev_enumerate_add_match_subsystem(device_enumerate, "block");
 	udev_enumerate_add_match_sysname(device_enumerate, "dasd*");
+	udev_enumerate_add_match_sysname(device_enumerate, "dm-*");
 	udev_enumerate_add_match_is_initialized(device_enumerate);
 	udev_enumerate_scan_devices(device_enumerate);
 
@@ -860,7 +881,10 @@ void *device_monitor_thread (void *ctx)
 		dbg("%s: check aio state, timeout %d secs",
 		    dev->dev_name, aio_timeout);
 		pthread_mutex_unlock(&dev->lock);
-		io_status = dasd_check_aio(dev, aio_timeout);
+		if (!strncmp(dev->dev_name, "dasd", 4))
+			io_status = dasd_check_aio(dev, aio_timeout);
+		else
+			io_status = mpath_check_status(dev, monitor_timeout);
 		if (io_status == IO_ERROR) {
 			warn("%s: error during aio submission, exit",
 			     dev->dev_name);
@@ -1075,9 +1099,11 @@ static void add_component(struct md_monitor *md, struct device_monitor *dev,
 	dev->md_name[MD_NAMELEN - 1] = '\0';
 	if (dev->md_index < 0)
 		md_rdev_update_index(md, dev);
-	dasd_set_attribute(dev, "failfast", 1);
-	dasd_set_attribute(dev, "failfast_retries", failfast_retries);
-	dasd_set_attribute(dev, "failfast_expires", failfast_timeout);
+	if (!strncmp(dev->dev_name, "dasd", 4)) {
+		dasd_set_attribute(dev, "failfast", 1);
+		dasd_set_attribute(dev, "failfast_retries", failfast_retries);
+		dasd_set_attribute(dev, "failfast_expires", failfast_timeout);
+	}
 }
 
 static void remove_component(struct device_monitor *dev)
@@ -1136,8 +1162,12 @@ static int reset_component(struct device_monitor *dev)
 		return -EIO;
 	}
 
-	dasd_timeout_ioctl(dev->device, 0);
-	dasd_set_attribute(dev, "failfast", 1);
+	if (!strncmp(dev->dev_name, "dasd", 4)) {
+		dasd_timeout_ioctl(dev->device, 0);
+		dasd_set_attribute(dev, "failfast", 1);
+	} else
+		mpath_modify_queueing(dev, 1, monitor_timeout);
+
 
 	switch (dev->md_status) {
 	case FAULTY:
@@ -1621,6 +1651,9 @@ static void fail_md(struct md_monitor *md_dev)
 			if (this_side == (pending_side >> 1)) {
 				if (!strncmp(dev->dev_name, "dasd", 4))
 					dasd_timeout_ioctl(dev->device, 1);
+				else
+					mpath_modify_queueing(dev, 0,
+							      monitor_timeout);
 			}
 		}
 		pthread_mutex_unlock(&md_dev->device_lock);
@@ -1978,7 +2011,8 @@ static void handle_event(struct udev_device *device)
 	if (!devname || !action)
 		return;
 	if (!strcmp(action, "add")) {
-		if (!strncmp(devname, "dasd", 4)) {
+		if (!strncmp(devname, "dasd", 4) ||
+		    !strncmp(devname, "dm-", 3)) {
 			attach_device(device);
 		}
 	} else if (!strcmp(action, "change")) {
@@ -1986,14 +2020,16 @@ static void handle_event(struct udev_device *device)
 			if (monitor_md(device) != 0)
 				unmonitor_md(device);
 		}
-		if (!strncmp(devname, "dasd", 4)) {
+		if (!strncmp(devname, "dasd", 4) ||
+		    !strncmp(devname, "dm-", 3)) {
 			attach_device(device);
 		}
 	} else if (!strcmp(action, "remove")) {
 		if (!strncmp(devname, "md", 2)) {
 			unmonitor_md(device);
 		}
-		if (!strncmp(devname, "dasd" , 4)) {
+		if (!strncmp(devname, "dasd" , 4) ||
+		    !strncmp(devname, "dm-", 3)) {
 			detach_device(device);
 		}
 	} else if (!strcmp(action, "move")) {
@@ -3020,8 +3056,9 @@ out:
 
 	lock_device_list();
 	list_for_each_entry_safe(found_dev, tmp_dev, &device_list, entry) {
-		info("%s: detached '%s'", found_dev->dev_name,
-		     udev_device_get_devpath(found_dev->device));
+		if (found_dev->device)
+			info("%s: detached '%s'", found_dev->dev_name,
+			     udev_device_get_devpath(found_dev->device));
 		list_del_init(&found_dev->entry);
 		if (found_dev->device)
 			device_monitor_put(found_dev);

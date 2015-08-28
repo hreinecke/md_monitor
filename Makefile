@@ -24,7 +24,7 @@ install: all
 	install -D -m 644 md_monitor.man $(DESTDIR)$(MAN8DIR)/md_monitor.8
 	install -D -m 644 setdasd.man $(DESTDIR)$(MAN8DIR)/setdasd.8
 
-md_monitor: md_monitor.o dasd_ioctl.o dasd_util.o
+md_monitor: md_monitor.o dasd_ioctl.o dasd_util.o mpath_util.c
 	$(CC) $(CFLAGS) -o $@ $^ -ludev -lpthread -laio
 
 setdasd: setdasd.o dasd_ioctl.o
@@ -40,6 +40,9 @@ dasd_ioctl.o: dasd_ioctl.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 dasd_util.o: dasd_util.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+mpath_util.o: mpath_util.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 md_monitor.c: md_monitor.h dasd_util.h md_debug.h dasd_ioctl.h list.h
