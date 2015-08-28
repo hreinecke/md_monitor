@@ -88,7 +88,7 @@ while [ $sleeptime -lt $MONITOR_TIMEOUT  ] ; do
 	[ $working_disks -eq $failed_disks ] && break;
     fi
     sleep 1
-    (( sleeptime ++ ))
+    (( sleeptime ++ )) || true
 done
 if [ $sleeptime -lt $MONITOR_TIMEOUT ] ; then
     echo "$(date) MD monitor picked up changes after $sleeptime seconds"
@@ -125,13 +125,13 @@ while [ $num -gt 0  ] ; do
     for d in ${DASDS_LEFT[@]} ; do
 	device=$(sed -n "s/${MD_NUM}.* \(${d}1\[[0-9]*\]\).*/\1/p" /proc/mdstat)
 	if [ "$device" ] ; then
-	    (( num -- ))
+	    (( num -- )) || true
 	fi
     done
     [ $num -eq 0 ] && break
     num=${#DASDS_LEFT[@]}
     sleep 1
-    (( sleeptime ++ ))
+    (( sleeptime ++ )) || true
 done
 if [ $sleeptime -lt $MONITOR_TIMEOUT ] ; then
     echo "$(date) MD monitor picked up changes after $sleeptime seconds"
@@ -175,7 +175,7 @@ while [ $sleeptime -lt 60  ] ; do
 	[ $working_disks -eq $failed_disks ] && break;
     fi
     sleep 1
-    (( sleeptime ++ ))
+    (( sleeptime ++ )) || true
 done
 if [ $sleeptime -lt $MONITOR_TIMEOUT ] ; then
     echo "$(date) MD monitor picked up changes after $sleeptime seconds"
@@ -202,13 +202,13 @@ while [ $num -gt 0  ] ; do
     for d in ${DASDS_RIGHT[@]} ; do
 	device=$(sed -n "s/${MD_NUM}.* \(${d}1\[[0-9]*\]\).*/\1/p" /proc/mdstat)
 	if [ "$device" ] ; then
-	    (( num -- ))
+	    (( num -- )) || true
 	fi
     done
     [ $num -eq 0 ] && break
     num=${#DASDS_RIGHT[@]}
     sleep 1
-    (( sleeptime ++ ))
+    (( sleeptime ++ )) || true
 done
 if [ $sleeptime -lt $MONITOR_TIMEOUT ] ; then
     echo "$(date) MD monitor picked up changes after $sleeptime seconds"
