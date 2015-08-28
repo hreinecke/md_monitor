@@ -53,7 +53,7 @@ while [ $sleeptime -lt $RESHAPE_TIMEOUT ] ; do
     dirty=$(sed -n 's/.*bitmap: \([0-9]*\)\/[0-9]* pages.*/\1/p' /proc/mdstat)
     [ $dirty -eq 0 ] && break;
     sleep 1
-    (( sleeptime ++))
+    (( sleeptime ++)) || true
 done
 if [ $sleeptime -ge $RESHAPE_TIMEOUT ] ; then
     error_exit "Bitmap not cleared after $sleeptime seconds"

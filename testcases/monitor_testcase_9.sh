@@ -77,7 +77,7 @@ while [ $wait_time -lt $MD_TIMEOUT ] ; do
     new_status=$(md_monitor -c "MonitorStatus:/dev/${MD_NUM}")
     [ $new_status == $old_status ] && break
     sleep 1
-    (( wait_time++ ))
+    (( wait_time++ )) || true
 done
 if [ $wait_time -ge $MD_TIMEOUT ] ; then
     error_exit "Monitor status hasn't changed for $MD_TIMEOUT seconds"
