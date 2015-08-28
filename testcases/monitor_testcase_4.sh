@@ -30,7 +30,6 @@ activate_dasds
 
 clear_metadata
 
-modprobe vmcp
 userid=$(vmcp q userid | cut -f 1 -d ' ')
 if [ -z "$userid" ] ; then
     error_exit "This testcase can only run under z/VM"

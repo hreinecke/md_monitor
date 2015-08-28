@@ -31,7 +31,6 @@ activate_dasds
 
 clear_metadata
 
-modprobe vmcp
 userid=$(vmcp q userid | cut -f 1 -d ' ')
 if [ -z "$userid" ] ; then
     error_exit "No z/VM userid"

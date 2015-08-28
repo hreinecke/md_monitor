@@ -16,7 +16,6 @@ CHPID_RIGHT="0.4e"
 
 detach_other_half=1
 
-modprobe vmcp
 userid=$(vmcp q userid | cut -f 1 -d ' ')
 if [ -z "$userid" ] ; then
     error_exit "No z/VM userid"

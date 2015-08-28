@@ -181,9 +181,12 @@ function activate_dasds() {
     local DEVNO_RIGHT_END="0xa1c8"
     local i=0
 
-    if ! grep -q vmcp /proc/modules ; then
-	modprobe vmcp
+    if ! zgrep -q VMCP=y /proc/config.gz ; then
+	if ! grep -q vmcp /proc/modules ; then
+	    modprobe vmcp
+	fi
     fi
+    [ -f /proc/mdstat ] || modprobe raid10
     userid=$(vmcp q userid 2> /dev/null | cut -f 1 -d ' ')
     if [ "$userid" = "LINUX025" ] ; then
         # linux025 layout
