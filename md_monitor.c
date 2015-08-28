@@ -850,6 +850,68 @@ void device_monitor_cleanup(void *data)
 	device_monitor_put(dev);
 }
 
+enum md_rdev_status
+device_monitor_update(struct device_monitor *dev,
+		      enum device_io_status io_status,
+		      enum md_rdev_status new_status)
+
+{
+	if (io_status != IO_OK) {
+		switch (new_status) {
+		case RECOVERY:
+			warn("%s: failing device in recovery",
+			     dev->dev_name);
+			fail_mirror(dev, FAULTY);
+			break;
+		case IN_SYNC:
+			warn("%s: failing device in_sync",
+			     dev->dev_name);
+			new_status = FAULTY;
+			/* Fallthrough */
+		case FAULTY:
+			/*
+			 * I/O timeout might not have been
+			 *  acknowledged by md yet.
+			 */
+			if (io_status == IO_TIMEOUT)
+				new_status = TIMEOUT;
+			warn("%s: failing faulty device",
+			     dev->dev_name);
+			/* Fallthrough */
+		case PENDING:
+		case TIMEOUT:
+			fail_mirror(dev, new_status);
+			break;
+		default:
+			warn("%s: Invalid array state", dev->dev_name);
+			break;
+		}
+	} else {
+		switch (new_status) {
+		case IN_SYNC:
+			if (stop_on_sync) {
+				info("%s: path ok, stopping monitor",
+				     dev->dev_name);
+				pthread_mutex_lock(&dev->lock);
+				dev->running = 0;
+				pthread_mutex_unlock(&dev->lock);
+				new_status = STOPPED;
+			}
+			break;
+		case RECOVERY:
+		case BLOCKED:
+		case FAULTY:
+		case TIMEOUT:
+		case SPARE:
+			reset_mirror(dev);
+			/* Fallthrough */
+		default:
+			break;
+		}
+	}
+	return new_status;
+}
+
 void *device_monitor_thread (void *ctx)
 {
 	struct device_monitor *dev = ctx;
@@ -943,60 +1005,7 @@ void *device_monitor_thread (void *ctx)
 		dev->io_status = io_status;
 		pthread_cond_signal(&dev->io_cond);
 		pthread_mutex_unlock(&dev->lock);
-		if (io_status != IO_OK) {
-			switch (new_status) {
-			case RECOVERY:
-				warn("%s: failing device in recovery",
-				     dev->dev_name);
-				fail_mirror(dev, FAULTY);
-				break;
-			case IN_SYNC:
-				warn("%s: failing device in_sync",
-				     dev->dev_name);
-				new_status = FAULTY;
-				/* Fallthrough */
-			case FAULTY:
-				/*
-				 * I/O timeout might not have been
-				 *  acknowledged by md yet.
-				 */
-				if (io_status == IO_TIMEOUT)
-					new_status = TIMEOUT;
-				warn("%s: failing faulty device",
-				     dev->dev_name);
-				/* Fallthrough */
-			case PENDING:
-			case TIMEOUT:
-				fail_mirror(dev, new_status);
-				break;
-			default:
-				warn("%s: Invalid array state", dev->dev_name);
-				break;
-			}
-		} else {
-			switch (new_status) {
-			case IN_SYNC:
-				if (stop_on_sync) {
-					info("%s: path ok, stopping monitor",
-					     dev->dev_name);
-					sig_timeout = 0;
-					pthread_mutex_lock(&dev->lock);
-					dev->running = 0;
-					pthread_mutex_unlock(&dev->lock);
-					new_status = STOPPED;
-				}
-				break;
-			case RECOVERY:
-			case BLOCKED:
-			case FAULTY:
-			case TIMEOUT:
-			case SPARE:
-				reset_mirror(dev);
-				/* Fallthrough */
-			default:
-				break;
-			}
-		}
+		new_status = device_monitor_update(dev, io_status, new_status);
 		info("%s: state %s / %s",
 		     dev->dev_name, md_rdev_print_state(new_status),
 		     device_io_print_state(io_status));
