@@ -583,10 +583,11 @@ static void discover_devices(struct udev *udev)
 static void md_rdev_update_index(struct md_monitor *md,
 				 struct device_monitor *dev)
 {
-	int ioctl_fd, i, offset = 0;
+	int ioctl_fd, i;
 	mdu_disk_info_t info;
 	char mdpath[256];
 	dev_t mon_devt, tmp_devt;
+	struct udev *udev;
 
 	if (!md) {
 		dbg("No MD array found");
@@ -599,6 +600,7 @@ static void md_rdev_update_index(struct md_monitor *md,
 		warn("%s: Couldn't open %s: %m", md->dev_name, mdpath);
 		return;
 	}
+	udev = udev_device_get_udev(md->device);
 	for (i = 0; i < 4096; i++) {
 		info.number = i;
 		if (ioctl(ioctl_fd, GET_DISK_INFO, &info) < 0) {
@@ -610,24 +612,21 @@ static void md_rdev_update_index(struct md_monitor *md,
 			continue;
 
 		/*
-		 * Magic:
-		 * We have to figure out the minor number of the
-		 * corresponding block device.
-		 * For DASD it's major 94 with pitch 4
-		 * For SCSI it's major 8,
-		 * 65, 66, 67, 68, 69, 70, 71,
-		 * 128, 129, 130, 131, 132, 133, 134, 135
-		 * with pitch 16
+		 * Figure out the corresponding block device.
+		 * It can either be the device itself or
+		 * (if the MD array is running on a partition)
+		 * the parent of the device.
 		 */
-		if (info.major == 94) {
-			offset = info.minor % 4;
-		} else if (info.major == 8 ||
-			   (info.major > 64 && info.major < 72) ||
-			   (info.major > 127 && info.major < 136)) {
-			offset = info.minor % 16;
-		}
-		mon_devt = makedev(info.major, info.minor - offset);
 		tmp_devt = udev_device_get_devnum(dev->device);
+		mon_devt = makedev(info.major, info.minor);
+		if (tmp_devt != mon_devt) {
+			struct udev_device *mon_dev;
+
+			mon_dev = udev_device_new_from_devnum(udev, 'b', mon_devt);
+			mon_devt = udev_device_get_devnum(udev_device_get_parent(mon_dev));
+			udev_device_unref(mon_dev);
+		}
+
 		if (tmp_devt == mon_devt) {
 			if (!dev->parent)
 				dev->parent = md->device;
@@ -816,7 +815,10 @@ void device_monitor_cleanup(void *data)
 		free(dev->buf);
 		dev->buf = NULL;
 	}
-	info("%s: shutdown dasd monitor thread", dev->dev_name);
+	if (strncmp(dev->dev_name, "dasd", 4))
+		 mpath_modify_queueing(dev, 1, monitor_timeout);
+
+	info("%s: shutdown device monitor thread", dev->dev_name);
 	pthread_mutex_lock(&dev->lock);
 	dev->running = 0;
 	dev->thread = 0;
@@ -1448,14 +1450,13 @@ static void remove_md_component(struct md_monitor *md_dev,
 static void discover_md_components(struct md_monitor *md)
 {
 	const char *mdname = udev_device_get_sysname(md->device);
-	int ioctl_fd, i, offset = 0;
+	int ioctl_fd, i;
 	mdu_disk_info_t info;
 	struct device_monitor *tmp, *found = NULL;
 	char mdpath[256];
-	dev_t raid_devt, mon_devt, tmp_devt;
 	struct udev *udev;
-	struct udev_device *raid_dev;
 	struct list_head update_list;
+	const char *devtype, *sysname;
 
 	if (!mdname) {
 		dbg("No MD array found");
@@ -1464,6 +1465,7 @@ static void discover_md_components(struct md_monitor *md)
 
 	info("%s: discover", mdname);
 	md->in_discovery = 1;
+	udev = udev_device_get_udev(md->device);
 	sprintf(mdpath, "/dev/%s", mdname);
 	ioctl_fd = open(mdpath, O_RDONLY|O_NONBLOCK);
 	if (ioctl_fd < 0) {
@@ -1476,6 +1478,9 @@ static void discover_md_components(struct md_monitor *md)
 	pthread_mutex_lock(&md->device_lock);
 	list_splice_init(&md->children, &update_list);
 	for (i = 0; i < 4096; i++) {
+		dev_t raid_devt, mon_devt, tmp_devt;
+		struct udev_device *raid_dev, *mon_dev;
+
 		info.number = i;
 		if (ioctl(ioctl_fd, GET_DISK_INFO, &info) < 0) {
 			warn("%s: ioctl GET_DISK_INFO for disk %d failed: %m",
@@ -1485,26 +1490,31 @@ static void discover_md_components(struct md_monitor *md)
 		if (info.major == 0 && info.minor == 0)
 			continue;
 
+		info("%s: discover raid disk %d (%d:%d)", mdname, i,
+		     info.major, info.minor);
+
 		found = NULL;
 		/*
-		 * Magic:
-		 * We have to figure out the minor number of the
-		 * corresponding block device.
-		 * For DASD it's major 94 with pitch 4
-		 * For SCSI it's major 8,
-		 * 65, 66, 67, 68, 69, 70, 71,
-		 * 128, 129, 130, 131, 132, 133, 134, 135
-		 * with pitch 16
+		 * Figure out the corresponding block device.
+		 * It can either be the device itself of
+		 * (if the MD array is running on a partition)
+		 * the parent of the device.
 		 */
 		raid_devt = makedev(info.major, info.minor);
-		if (info.major == 94) {
-			offset = info.minor % 4;
-		} else if (info.major == 8 ||
-			   (info.major > 64 && info.major < 72) ||
-			   (info.major > 127 && info.major < 136)) {
-			offset = info.minor % 16;
+		raid_dev = udev_device_new_from_devnum(udev, 'b', raid_devt);
+		if (!raid_dev) {
+			warn("%s: raid disk %d (%d:%d) not found",
+			     mdname, i, info.major, info.minor);
+			continue;
 		}
-		mon_devt = makedev(info.major, info.minor - offset);
+		devtype = udev_device_get_devtype(raid_dev);
+		if (!devtype || !strncmp(devtype, "disk", 4)) {
+			mon_dev = raid_dev;
+			mon_devt = raid_devt;
+		} else {
+			mon_dev = udev_device_get_parent(raid_dev);
+			mon_devt = udev_device_get_devnum(mon_dev);
+		}
 		/* Restart monitoring on existing devices */
 		list_for_each_entry(tmp, &update_list, siblings) {
 			tmp_devt = udev_device_get_devnum(tmp->device);
@@ -1525,6 +1535,7 @@ static void discover_md_components(struct md_monitor *md)
 			list_move(&found->siblings, &md->children);
 			monitor_device(found);
 			found = NULL;
+			udev_device_unref(raid_dev);
 			continue;
 		}
 		/* Start monitoring a new device */
@@ -1540,24 +1551,16 @@ static void discover_md_components(struct md_monitor *md)
 		if (!found) {
 			warn("%s: raid disk %d (%d:%d) not attached", mdname,
 			     i, info.major, info.minor);
-			udev = udev_device_get_udev(md->device);
-			raid_dev = udev_device_new_from_devnum(udev, 'b', raid_devt);
-			if (raid_dev) {
-				found = allocate_device(raid_dev);
-				udev_device_unref(raid_dev);
-			} else {
-				warn("%s: raid disk %d (%d:%d) not found",
-				     mdname, i, info.major, info.minor);
-				continue;
-			}
+			found = allocate_device(mon_dev);
 		}
 		found->md_index = i;
 		found->md_slot = info.raid_disk;
-		udev = udev_device_get_udev(md->device);
-		raid_dev = udev_device_new_from_devnum(udev, 'b', raid_devt);
-		info("%s: Start monitoring %s", mdname,
-		     udev_device_get_sysname(raid_dev));
-		add_component(md, found, udev_device_get_sysname(raid_dev));
+		sysname = udev_device_get_sysname(raid_dev);
+		if (!strncmp(sysname, "dm-", 3))
+			sysname = udev_device_get_sysattr_value(raid_dev,
+								"dm/name");
+		info("%s: Start monitoring %s", mdname, sysname);
+		add_component(md, found, sysname);
 		udev_device_unref(raid_dev);
 		list_add(&found->siblings, &md->children);
 		monitor_device(found);
