@@ -357,7 +357,7 @@ function activate_devices()
     if [ "$hostname" = "elnath" ] ; then
 	activate_scsi
     else
-	activate_dasd
+	activate_dasds
     fi
 }
 
