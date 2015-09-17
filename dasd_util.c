@@ -50,13 +50,14 @@ int dasd_set_attribute(struct device_monitor *dev, const char *attr, int value)
 
 	parent = udev_device_get_parent(dev->device);
 	if (!parent)
-		return 0;
+		return -ENXIO;
 	sprintf(attrpath, "%s/%s", udev_device_get_syspath(parent), attr);
 	attr_fd = open(attrpath, O_RDWR);
 	if (attr_fd < 0) {
 		info("%s: failed to open '%s' attribute for %s: %m",
 		     dev->dev_name, attr, attrpath);
-		return 0;
+		rc = -errno;
+		goto out_close;
 	}
 
 	memset(status, 0, status_len);
@@ -64,17 +65,19 @@ int dasd_set_attribute(struct device_monitor *dev, const char *attr, int value)
 	if (len < 0) {
 		warn("%s: cannot read '%s' attribute: %m",
 		     dev->dev_name, attr);
-		rc = errno;
-		goto remove;
+		rc = -errno;
+		goto out_close;
 	}
 	if (len == 0) {
 		warn("%s: EOF on reading '%s' attribute", dev->dev_name, attr);
-		goto remove;
+		rc = len;
+		goto out_close;
 	}
 	if (len == status_len) {
 		warn("%s: Overflow on reading '%s' attribute",
 		     dev->dev_name, attr);
-		goto remove;
+		rc = len;
+		goto out_close;
 	}
 	if (status[len - 1] == '\n') {
 		status[len - 1] = '\0';
@@ -84,13 +87,13 @@ int dasd_set_attribute(struct device_monitor *dev, const char *attr, int value)
 
 	if (!strlen(status)) {
 		warn("%s: empty '%s' attribute", dev->dev_name, attr);
-		goto remove;
+		goto out_close;
 	}
 	oldvalue = strtoul(status, &eptr, 10);
 	if (status == eptr) {
 		warn("%s: invalid '%s' attribute value '%s'",
 		     dev->dev_name, attr, status);
-		goto remove;
+		goto out_close;
 	}
 	if (oldvalue != value) {
 		sprintf(status, "%d", value);
@@ -98,12 +101,12 @@ int dasd_set_attribute(struct device_monitor *dev, const char *attr, int value)
 		if (len < 0) {
 			warn("%s: cannot set '%s' attribute to '%s': %m",
 			     dev->dev_name, attr, status);
-			rc = errno;
+			rc = -errno;
 		}
 		info("%s: '%s' = '%s'", dev->dev_name, attr, status);
-		rc = 0;
+		rc = len;
 	}
-remove:
+out_close:
 	if (attr_fd >= 0)
 		close(attr_fd);
 	return rc;

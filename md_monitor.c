@@ -1130,6 +1130,9 @@ static void add_component(struct md_monitor *md, struct device_monitor *dev,
 		md_rdev_update_index(md, dev);
 	if (!strncmp(dev->dev_name, "dasd", 4)) {
 		dasd_set_attribute(dev, "failfast", 1);
+		if (dasd_set_attribute(dev, "timeout",
+			(failfast_retries + 1) * failfast_timeout) > 0)
+			return;
 		dasd_set_attribute(dev, "failfast_retries", failfast_retries);
 		dasd_set_attribute(dev, "failfast_expires", failfast_timeout);
 	}
