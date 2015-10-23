@@ -543,15 +543,21 @@ static void attach_device(struct udev_device *udev_dev)
 	}
 	unlock_device_list();
 	if (found_md) {
+		const char *mdname = udev_device_get_sysname(found_md->device);
 		if (!strncmp(devname, "dm-", 3))
 			devname = udev_device_get_sysattr_value(udev_dev,
 								"dm/name");
-		add_component(found_md, found, devname);
 		pthread_mutex_lock(&found_md->device_lock);
-		if (list_empty(&found->siblings))
+		if (!list_empty(&found->siblings)) {
+			warn("%s: Already monitoring %s",
+			     mdname, found->md_name);
+		} else {
+			add_component(found_md, found, devname);
+			info("%s: Start monitoring %s", mdname, found->md_name);
 			list_add(&found->siblings, &found_md->children);
+			monitor_device(found);
+		}
 		pthread_mutex_unlock(&found_md->device_lock);
-		monitor_device(found);
 	} else {
 		dbg("%s: no md array found", devname);
 	}
@@ -1624,11 +1630,16 @@ static void discover_md_components(struct md_monitor *md)
 		if (!strncmp(sysname, "dm-", 3))
 			sysname = udev_device_get_sysattr_value(raid_dev,
 								"dm/name");
-		add_component(md, found, sysname);
-		info("%s: Start monitoring %s", mdname, found->md_name);
-		udev_device_unref(raid_dev);
-		list_add(&found->siblings, &md->children);
-		monitor_device(found);
+		if (!list_empty(&found->siblings)) {
+			warn("%s: Already monitoring %s",
+			     mdname, found->md_name);
+		} else {
+			add_component(md, found, sysname);
+			info("%s: Start monitoring %s", mdname, found->md_name);
+			udev_device_unref(raid_dev);
+			list_add(&found->siblings, &md->children);
+			monitor_device(found);
+		}
 		found = NULL;
 	}
 	pthread_mutex_unlock(&md->device_lock);
