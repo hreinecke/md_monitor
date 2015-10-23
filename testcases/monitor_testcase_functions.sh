@@ -141,6 +141,7 @@ function stop_md() {
     fi
     STOP_LOG="/tmp/monitor_${MD_NAME}_mdstat_stop.log"
     if [ -n "${START_LOG}" ] ; then
+	mdadm --wait /dev/${cur_md} || true
 	mdadm --detail /dev/${cur_md} | sed '/Update Time/D;/Events/D' | tee ${STOP_LOG}
 	if ! diff -u ${START_LOG} ${STOP_LOG} ; then
 	    echo "MD array configuration inconsistent"
