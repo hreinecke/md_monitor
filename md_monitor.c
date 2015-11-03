@@ -461,26 +461,27 @@ static void attach_device(struct udev_device *udev_dev)
 {
 	struct md_monitor *found_md = NULL;
 	struct device_monitor *tmp, *found = NULL;
+	struct udev_device *raid_dev;
 	const char *devtype, *alias, *status;
 	const char *devname = udev_device_get_sysname(udev_dev);
 	char devpath[256];
 	DIR *dirp;
 	struct dirent *dirfd;
-	dev_t udev_devt, tmp_devt;
+	dev_t udev_devt, tmp_devt, raid_devt;
 
 	devtype = udev_device_get_devtype(udev_dev);
 	udev_devt = udev_device_get_devnum(udev_dev);
 	dbg("dev %s devtype %s", devname, devtype);
 	if (!strncmp(devname, "dasd", 4)) {
-		struct udev_device *dasd_dev;
-
 		if (!devtype || !strncmp(devtype, "disk", 4)) {
 			/* Not a partition, ignore */
 			info("%s: not a partition, ignore", devname);
 			return;
 		}
-		dasd_dev = udev_device_get_parent(udev_dev);
-		status = udev_device_get_sysattr_value(dasd_dev, "status");
+		raid_dev = udev_device_get_parent(udev_dev);
+		raid_devt = udev_device_get_devnum(raid_dev);
+		status = udev_device_get_sysattr_value(raid_dev, "status");
+		info("%s: device in state %s", devname, status);
 		if (status && strcmp(status, "online")) {
 			/*
 			 * Device not online. The kernel will send out
@@ -490,7 +491,7 @@ static void attach_device(struct udev_device *udev_dev)
 			info("%s: device in state %s, ignore", devname, status);
 			return;
 		}
-		alias = udev_device_get_sysattr_value(dasd_dev, "alias");
+		alias = udev_device_get_sysattr_value(raid_dev, "alias");
 		if (alias && alias[0] == '1') {
 			/* Alias device, ignore */
 			info("%s: aliased device, ignore", devname);
@@ -499,12 +500,19 @@ static void attach_device(struct udev_device *udev_dev)
 	} else if (!strncmp(devname, "dm-", 3)) {
 		const char *uuid;
 
+		raid_dev = udev_dev;
+		raid_devt = udev_devt;
 		uuid = udev_device_get_sysattr_value(udev_dev, "dm/uuid");
 		if (strncmp(uuid, "mpath-", 6)) {
 			info("%s: unhandled DM uuid '%s', ignore",
 			     devname, uuid);
 			return;
 		}
+		devname = udev_device_get_sysattr_value(udev_dev,
+							"dm/name");
+	} else {
+		warn("%s: unhandled device, ignore", devname);
+		return;
 	}
 	sprintf(devpath, "%s/holders",
 		udev_device_get_syspath(udev_dev));
@@ -522,7 +530,7 @@ static void attach_device(struct udev_device *udev_dev)
 	lock_device_list();
 	list_for_each_entry(tmp, &device_list, entry) {
 		tmp_devt = udev_device_get_devnum(tmp->device);
-		if (tmp_devt == udev_devt) {
+		if (tmp_devt == raid_devt) {
 			found = tmp;
 			break;
 		}
@@ -530,23 +538,21 @@ static void attach_device(struct udev_device *udev_dev)
 	if (found) {
 		info("%s: already attached", found->dev_name);
 	} else {
-		found = allocate_device(udev_dev);
+		found = allocate_device(raid_dev);
 		if (!found) {
 			err("%s: out of memory allocating device",
-			    udev_device_get_sysname(udev_dev));
+			    udev_device_get_sysname(raid_dev));
 			unlock_device_list();
 			return;
 		}
 		list_add(&found->entry, &device_list);
 		info("%s: attached '%s'", found->dev_name,
-		     udev_device_get_devpath(udev_dev));
+		     udev_device_get_devpath(raid_dev));
 	}
 	unlock_device_list();
 	if (found_md) {
 		const char *mdname = udev_device_get_sysname(found_md->device);
-		if (!strncmp(devname, "dm-", 3))
-			devname = udev_device_get_sysattr_value(udev_dev,
-								"dm/name");
+
 		pthread_mutex_lock(&found_md->device_lock);
 		if (!list_empty(&found->siblings)) {
 			warn("%s: Already monitoring %s",
@@ -1567,7 +1573,7 @@ static void discover_md_components(struct md_monitor *md)
 		found = NULL;
 		/*
 		 * Figure out the corresponding block device.
-		 * It can either be the device itself of
+		 * It can either be the device itself or
 		 * (if the MD array is running on a partition)
 		 * the parent of the device.
 		 */
@@ -1623,6 +1629,11 @@ static void discover_md_components(struct md_monitor *md)
 			warn("%s: raid disk %d (%d:%d) not attached", mdname,
 			     i, info.major, info.minor);
 			found = allocate_device(mon_dev);
+			if (!found) {
+				err("%s: out of memory allocating device (%d:%d)",
+				    mdname, info.major, info.minor);
+				continue;
+			}
 		}
 		found->md_index = i;
 		found->md_slot = info.raid_disk;
