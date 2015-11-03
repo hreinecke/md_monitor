@@ -1022,9 +1022,9 @@ void *device_monitor_thread (void *ctx)
 			 * decisions yet. Wait until we got the I/O
 			 * results.
 			 */
-			info("%s: path checker busy, retry", dev->dev_name);
+			info("%s: path checker not started, retry",
+			     dev->dev_name);
 			aio_timeout = monitor_timeout;
-			dev->io_status = io_status;
 			continue;
 		}
 		dev->io_status = io_status;
