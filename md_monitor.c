@@ -1728,6 +1728,11 @@ static void fail_md(struct md_monitor *md_dev)
 		dbg("%s: mirror set-%c failed", md_name,
 		    (pending_side >> 1) ? 'B' : 'A');
 		pthread_mutex_lock(&md_dev->device_lock);
+		/*
+		 * When failing one side we need to disable the
+		 * 'failfast' setting on the other, as the array
+		 * is required to wait for I/O in this case.
+		 */
 		list_for_each_entry(dev, &md_dev->children, siblings) {
 			int this_side = dev->md_slot % (layout & 0xFF);
 			if (this_side == (pending_side >> 1)) {
