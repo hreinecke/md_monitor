@@ -786,6 +786,17 @@ enum md_rdev_status md_rdev_update_state(struct device_monitor *dev,
 			md_status = dev->md_status;
 		}
 		break;
+	case TIMEOUT:
+		/*
+		 * TIMEOUT implies that the DASD timeout flag is set,
+		 * hence all I/O will be failed. But that does not
+		 * imply that the path itself has failed.
+		 */
+		if (md_status != FAULTY)
+			dev->md_status = md_status;
+		else
+			md_status = TIMEOUT;
+		break;
 	default:
 		dev->md_status = md_status;
 		break;
