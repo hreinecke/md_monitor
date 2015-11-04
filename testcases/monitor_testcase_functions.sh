@@ -30,7 +30,6 @@ function start_md() {
     local MD_DEVICES=$2
     local MD_MONITOR=/sbin/md_monitor
     local MD_SCRIPT=/usr/share/misc/md_notify_device.sh
-    local LOGFILE="/tmp/monitor_${MD_NAME}.log"
     local MD_ARGS="--bitmap=internal --chunk=1024 --assume-clean --force"
     local n=0
     local devlist
@@ -54,6 +53,8 @@ function start_md() {
 	n=$(expr $n + 1)
     done
 
+    STARTDATE=$(date +"%Y-%m-%d %H:%M:%S")
+
     if [ -f /usr/lib/systemd/system/mdmonitor.service ] ; then
 	echo "Stopping mdmonitor"
 	systemctl stop mdmonitor
@@ -73,8 +74,6 @@ function start_md() {
     mdadm --brief --detail ${MD_DEVNAME} >> /etc/mdadm.conf
     echo "PROGRAM ${MD_SCRIPT}" >> /etc/mdadm.conf
 
-    rm /var/log/messages
-    rcsyslog restart
     MONITOR_PID=$(/sbin/md_monitor -y -p 7 -d -s)
     trapcmd="[ \$? -ne 0 ] && echo TEST FAILED while executing \'\$BASH_COMMAND\', EXITING"
     trapcmd="$trapcmd ; logger ${MD_NAME}: failed"
@@ -95,6 +94,7 @@ function start_md() {
     if [ -n "$IOSTAT_PID" ] ; then
 	trapcmd="$trapcmd ; stop_iostat"
     fi
+    trapcmd="$trapcmd ; write_log $MD_NAME"
     if [ -n "$trapcmd" ] ; then
 	trap "$trapcmd" EXIT
     fi
@@ -167,9 +167,17 @@ function stop_md() {
 	fi
     done
     clear_metadata
-    cp /var/log/messages /tmp/monitor_${MD_NAME}.log
+    if [ -n "$STARTDATE" ] ; then
+	write_log $MD_NAME
+    fi
     rm -f /etc/mdadm.conf
     rm -f /tmp/monitor_${MD_NAME}_step*.log
+}
+
+function write_log() {
+    local MD_NAME=$1
+
+    journalctl --since "$STARTDATE" > /tmp/monitor_${MD_NAME}.log
 }
 
 function wait_md() {
