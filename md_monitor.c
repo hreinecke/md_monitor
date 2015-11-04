@@ -903,8 +903,8 @@ device_monitor_update(struct device_monitor *dev,
 			 */
 			if (io_status == IO_TIMEOUT)
 				new_status = TIMEOUT;
-			warn("%s: failing faulty device",
-			     dev->dev_name);
+			warn("%s: failing %s device",
+			     dev->dev_name, md_rdev_print_state(new_status));
 			/* Fallthrough */
 		case PENDING:
 		case TIMEOUT:
