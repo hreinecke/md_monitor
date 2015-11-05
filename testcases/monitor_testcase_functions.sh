@@ -351,10 +351,13 @@ function clear_metadata() {
     echo -n "Clear MD Metadata ..."
     MD_DEVNUM=0
     for dev in ${DEVICES_LEFT[@]} ${DEVICES_RIGHT[@]} ; do
-	[ -b $dev ] || continue
+	echo -n " $dev ..."
+	if [ ! -b $dev ] ; then
+	    echo -n " (missing)"
+	    continue
+	fi
 	mdadm --zero-superblock --force $dev > /dev/null 2>&1
 	dd if=/dev/zero of=${dev} bs=4096 count=4096 >/dev/null 2>&1
-	echo -n " $dev ..."
 	MD_DEVNUM=$(( $MD_DEVNUM + 1 ))
     done
     echo " done"
