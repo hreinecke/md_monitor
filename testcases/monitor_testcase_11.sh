@@ -149,6 +149,8 @@ done
 logger "${MD_NAME}: success"
 
 mdadm --stop /dev/${MD2_NAME}
-mdadm --stop /dev/${MD3_NAME}
+if [ -n "${MD3_NAME}" ] ; then
+    mdadm --stop /dev/${MD3_NAME}
+fi
 
 stop_md ${MD_NUM}
