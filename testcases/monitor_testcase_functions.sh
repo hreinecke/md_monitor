@@ -217,7 +217,7 @@ function setup_one_dasd() {
 	error_exit "Failed to activate $dasd"
     fi
     if [ ! -d /sys/block/${dasd}/${dasd}1 ] || [ -d /sys/block/dasd/${dasd}/${dasd}2 ] ; then
-	if ! fdasd -a /dev/$dasd ; then
+	if ! fdasd -a /dev/$dasd > /dev/null 2>&1 ; then
 	    error_exit "Failed to partition $dasd"
 	fi
     fi
