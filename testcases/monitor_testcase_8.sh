@@ -94,7 +94,7 @@ for d in ${DEVICES_LEFT[0]} ; do
     md_status=$(md_monitor -c "MonitorStatus:/dev/${MD_NUM}")
     echo "Monitor status: $md_status"
     wait_md ${MD_NUM}
-
+    sleep 1
     if ! dasdfmt -p -y -b 4096 -f ${d%1} ; then
 	error_exit "Cannot format device ${d%1}"
     fi
