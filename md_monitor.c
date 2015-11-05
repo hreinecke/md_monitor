@@ -972,6 +972,10 @@ void *device_monitor_thread (void *ctx)
 	while (dev->running) {
 		dbg("%s: check aio state, timeout %d secs",
 		    dev->dev_name, aio_timeout);
+		if (dev->md_status == TIMEOUT) {
+			dasd_timeout_ioctl(dev->device, 0);
+			dev->md_status = UNKNOWN;
+		}
 		pthread_mutex_unlock(&dev->lock);
 		io_status = dasd_check_aio(dev, aio_timeout);
 		if (io_status == IO_ERROR) {
