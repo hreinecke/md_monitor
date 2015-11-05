@@ -40,9 +40,9 @@ run_wget() {
     local devno=$1
     local action=$2
 
-    result=$(wget -nv --max-redirect=0 "http://s390vsl026.suse.de/dasd.php?ccw=${devno}&action=${action}" 2>&1)
+    result=$(curl -f "http://s390vsl026.suse.de/dasd.php?ccw=${devno}&action=${action}" 2>&1)
 
-    if [ "$result" != "0 redirections exceeded." ] ; then
+    if [ $? -ne 0 ] ; then
 	echo $result
 	return 1
     fi
