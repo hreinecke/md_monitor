@@ -77,7 +77,7 @@ int dasd_timeout_ioctl(struct udev_device *dev, int set)
 		warn("%s: device node not found", devname);
 		return -ENXIO;
 	}
-	ioctl_fd = open(devnode, O_RDWR);
+	ioctl_fd = open(devnode, O_RDONLY);
 	if (ioctl_fd < 0) {
 		warn("%s: cannot open %s for DASD ioctl: %m",
 		     devname, devnode);
@@ -123,7 +123,7 @@ int dasd_quiesce_ioctl(struct udev_device *dev, int set)
 		warn("%s: device removed", devname);
 		return -ENXIO;
 	}
-	ioctl_fd = open(devnode, O_RDWR);
+	ioctl_fd = open(devnode, O_RDONLY);
 	if (ioctl_fd < 0) {
 		warn("%s: cannot open %s for DASD ioctl: %m",
 		     devname, devnode);
