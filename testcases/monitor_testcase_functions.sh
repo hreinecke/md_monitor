@@ -600,3 +600,57 @@ function wait_for_monitor() {
     fi
     true
 }
+
+function wait_for_md_failed() {
+    local timeout=$1
+
+    echo "$(date) Ok. Waiting for MD to pick up changes ..."
+    # Wait for md_monitor to pick up changes
+    starttime=$(date +%s)
+    runtime=$starttime
+    endtime=$(date +%s --date="+ $timeout sec")
+    while [ $runtime -lt $endtime ] ; do
+	raid_status=$(sed -n 's/.*\[\([0-9]*\/[0-9]*\)\].*/\1/p' /proc/mdstat)
+	if [ "$raid_status" ] ; then
+	    raid_disks=${raid_status%/*}
+	    working_disks=${raid_status#*/}
+	    failed_disks=$(( raid_disks - working_disks))
+	    [ $working_disks -eq $failed_disks ] && break;
+	fi
+	sleep 1
+	runtime=$(date +%s)
+    done
+    elapsed=$(( $runtime - $starttime ))
+    if [ $runtime -lt $endtime ] ; then
+	echo "$(date) MD monitor picked up changes after $elapsed seconds"
+    else
+	error_exit "$working_disks / $raid_disks are still working after $elapsed seconds"
+    fi
+}
+
+function wait_for_md_running() {
+    local timeout=$1
+
+    echo "$(date) Waiting for MD to pick up changes ..."
+    # Wait for md_monitor to pick up changes
+    starttime=$(date +%s)
+    runtime=$starttime
+    endtime=$(date +%s --date="+ $timeout sec")
+    while [ $runtime -lt $endtime ] ; do
+	raid_status=$(sed -n 's/.*\[\([0-9]*\/[0-9]*\)\].*/\1/p' /proc/mdstat)
+	if [ "$raid_status" ] ; then
+	    raid_disks=${raid_status%/*}
+	    working_disks=${raid_status#*/}
+	    failed_disks=$(( raid_disks - working_disks))
+	    [ $failed_disks -eq 0 ] && break;
+	fi
+	sleep 1
+	runtime=$(date +%s)
+    done
+    elapsed=$(( $runtime - $starttime ))
+    if [ $runtime -lt $endtime ] ; then
+	echo "$(date) MD monitor picked up changes after $elapsed seconds"
+    else
+	error_exit "$failed_disks / $raid_disks are still faulty after $elapsed seconds"
+    fi
+}
