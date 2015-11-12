@@ -85,29 +85,8 @@ if [ $num -eq 0 ] ; then
     error_exit "$(date) no DASDs have been reserved after $sleeptime seconds"
 fi
 logger "$num DASDs reserved"
-echo "$(date) Ok. Waiting for MD to pick up changes ..."
-# Wait for md_monitor to pick up changes
-sleeptime=0
-num=${#DASDS_LEFT[@]}
-while [ $num -gt 0  ] ; do
-    mdstat=$(cat /proc/mdstat)
-    for d in ${DASDS_LEFT[@]} ; do
-	device=$(echo $mdstat | sed -n "s/${MD_NUM}.* \(${d}1\[[0-9]*\]([F|T])\).*/\1/p")
-	if [ "$device" ] ; then
-	    (( num -- )) || true
-	fi
-    done
-    [ $num -eq 0 ] && break
-    [ $sleeptime -gt $MONITOR_TIMEOUT ] && break
-    num=${#DASDS_LEFT[@]}
-    sleep 1
-    (( sleeptime ++ )) || true
-done
-if [ $num -eq 0 ] ; then
-    echo "$(date) MD monitor picked up changes after $sleeptime seconds"
-else
-    error_exit "$(date) MD monitor did not pick up changes after $sleeptime seconds"
-fi
+
+wait_for_md_failed $MONITOR_TIMEOUT
 
 echo "$(date) MD status"
 mdadm --detail /dev/${MD_NUM}
@@ -147,28 +126,7 @@ if [ $num -gt 0 ] ; then
 fi
 logger "All DASDs released"
 
-echo "$(date) Ok. Waiting for MD to pick up changes ..."
-# Wait for md_monitor to pick up changes
-sleeptime=0
-num=${#DASDS_LEFT[@]}
-while [ $num -gt 0  ] ; do
-    for d in ${DASDS_LEFT[@]} ; do
-	device=$(sed -n "s/${MD_NUM}.* \(${d}1\[[0-9]*\]\).*/\1/p" /proc/mdstat)
-	if [ "$device" ] ; then
-	    (( num -- )) || true
-	fi
-    done
-    [ $num -eq 0 ] && break
-    [ $sleeptime -gt $MONITOR_TIMEOUT ] && break
-    num=${#DASDS_LEFT[@]}
-    sleep 1
-    (( sleeptime ++ )) || true
-done
-if [ $num -eq 0 ] ; then
-    echo "$(date) MD monitor picked up changes after $sleeptime seconds"
-else
-    error_exit "$(date) MD monitor did not pick up changes after $sleeptime seconds"
-fi
+wait_for_md_running $MONITOR_TIMEOUT
 
 echo "$(date) MD status"
 mdadm --detail /dev/${MD_NUM}
