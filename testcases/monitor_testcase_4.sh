@@ -82,28 +82,7 @@ else
     done
 fi
 
-echo "$(date) Ok. Waiting for MD to pick up changes ..."
-# Wait for md_monitor to pick up changes
-starttime=$(date +%s)
-runtime=$starttime
-endtime=$(date +%s --date="+ $MONITOR_TIMEOUT sec")
-while [ $runtime -lt $endtime ] ; do
-    raid_status=$(sed -n 's/.*\[\([0-9]*\/[0-9]*\)\].*/\1/p' /proc/mdstat)
-    if [ "$raid_status" ] ; then
-	raid_disks=${raid_status%/*}
-	working_disks=${raid_status#*/}
-	failed_disks=$(( raid_disks - working_disks))
-	[ $working_disks -eq $failed_disks ] && break;
-    fi
-    sleep 1
-    runtime=$(date +%s)
-done
-elapsed=$(( $runtime - $starttime ))
-if [ $runtime -lt $endtime ] ; then
-    echo "$(date) MD monitor picked up changes after $elapsed seconds"
-else
-    error_exit "$working_disks / $raid_disks are still working after $elapsed seconds"
-fi
+wait_for_md_failed $MONITOR_TIMEOUT
 
 echo "$(date) Wait for 10 seconds"
 sleep 10
@@ -116,33 +95,7 @@ while true ; do
     fi
 done
 
-echo "$(date) Ok. Waiting for MD to pick up changes ..."
-# Wait for md_monitor to pick up changes
-num=${#DEVICES_LEFT[@]}
-starttime=$(date +%s)
-runtime=$starttime
-endtime=$(date +%s --date="+ $MONITOR_TIMEOUT sec")
-while [ $num -gt 0  ] ; do
-    [ $runtime -ge $endtime ] && break
-    for d in ${DEVICES_LEFT[@]} ; do
-	dev=${d##*/}
-	md_dev=$(sed -n "s/${MD_NUM}.* \(${dev}\[[0-9]*\]\).*/\1/p" /proc/mdstat)
-	if [ "$md_dev" ] ; then
-	    (( num -- )) || true
-	fi
-    done
-    [ $num -eq 0 ] && break
-    num=${#DEVICES_LEFT[@]}
-    sleep 1
-    runtime=$(date +%s)
-done
-
-elapsed=$(( $runtime - $starttime ))
-if [ $runtime -lt $endtime ] ; then
-    echo "$(date) MD monitor picked up changes after $elapsed seconds"
-else
-    error_exit "$(date) ERROR: $num devices are still faulty after $elapsed seconds"
-fi
+wait_for_md_running $MONITOR_TIMEOUT
 
 echo "$(date) MD status"
 mdadm --detail /dev/${MD_NUM}
@@ -178,27 +131,7 @@ if [ "$detach_other_half" ] ; then
 	done
     fi
 
-    echo "$(date) Ok. Waiting for MD to pick up changes ..."
-    starttime=$(date +%s)
-    runtime=$starttime
-    endtime=$(date +%s --date="+ $MONITOR_TIMEOUT sec")
-    while [ $runtime -lt $endtime ] ; do
-	raid_status=$(sed -n 's/.*\[\([0-9]*\/[0-9]*\)\].*/\1/p' /proc/mdstat)
-	if [ "$raid_status" ] ; then
-	    raid_disks=${raid_status%/*}
-	    working_disks=${raid_status#*/}
-	    failed_disks=$(( raid_disks - working_disks))
-	    [ $working_disks -eq $failed_disks ] && break;
-	fi
-	sleep 1
-	runtime=$(date +%s)
-    done
-    elapsed=$(( $runtime - $starttime ))
-    if [ $runtime -lt $endtime ] ; then
-	echo "$(date) MD monitor picked up changes after $elapsed seconds"
-    else
-	error_exit "$working_disks / $raid_disks are still working after $elapsed seconds"
-    fi
+    wait_for_md_failed $MONITOR_TIMEOUT
 
     sleep 5
     mdadm --detail /dev/${MD_NUM}
@@ -210,32 +143,7 @@ if [ "$detach_other_half" ] ; then
 	fi
     done
 
-    echo "$(date) Ok. Waiting for MD to pick up changes ..."
-    # Wait for md_monitor to pick up changes
-    num=${#DEVICES_RIGHT[@]}
-    starttime=$(date +%s)
-    runtime=$starttime
-    endtime=$(date +%s --date="+ $MONITOR_TIMEOUT sec")
-    while [ $num -gt 0  ] ; do
-	[ $runtime -ge $endtime ] && break
-	for d in ${DEVICES_RIGHT[@]} ; do
-	    dev=${d##*/}
-	    md_dev=$(sed -n "s/${MD_NUM}.* \(${dev}\[[0-9]*\]\).*/\1/p" /proc/mdstat)
-	    if [ "$md_dev" ] ; then
-		(( num -- )) || true
-	    fi
-	done
-	[ $num -eq 0 ] && break
-	num=${#DEVICES_RIGHT[@]}
-	sleep 1
-	runtime=$(date +%s)
-    done
-    elapsed=$(( $runtime - $starttime ))
-    if [ $runtime -lt $endtime ] ; then
-	echo "$(date) MD monitor picked up changes after $elapsed seconds"
-    else
-	error_exit "$(date) ERROR: $num devices are still faulty after $elapsed seconds"
-    fi
+    wait_for_md_running $MONITOR_TIMEOUT
     
     wait_for_sync ${MD_NUM} || \
 	error_exit "Failed to synchronize array"
