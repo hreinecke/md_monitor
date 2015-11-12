@@ -68,7 +68,7 @@ function start_md() {
     mdadm --wait ${MD_DEVNAME} || true
 
     START_LOG="/tmp/monitor_${MD_NAME}_mdstat_start.log"
-    mdadm --detail ${MD_DEVNAME} | sed '/Update Time/D;/Events/D' | tee ${START_LOG}
+    mdadm --detail ${MD_DEVNAME} | sed '/Update Time/D;/Events/D;/State/D' | tee ${START_LOG}
     echo "POLICY action=re-add" > /etc/mdadm.conf
     echo "AUTO -all" >> /etc/mdadm.conf
     mdadm --brief --detail ${MD_DEVNAME} >> /etc/mdadm.conf
@@ -142,7 +142,7 @@ function stop_md() {
     STOP_LOG="/tmp/monitor_${MD_NAME}_mdstat_stop.log"
     if [ -n "${START_LOG}" ] ; then
 	mdadm --wait /dev/${cur_md} || true
-	mdadm --detail /dev/${cur_md} | sed '/Update Time/D;/Events/D' | tee ${STOP_LOG}
+	mdadm --detail /dev/${cur_md} | sed '/Update Time/D;/Events/D;/State/D' | tee ${STOP_LOG}
 	if ! diff -u ${START_LOG} ${STOP_LOG} ; then
 	    echo "MD array configuration inconsistent"
 	    exit 1

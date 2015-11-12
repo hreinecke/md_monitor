@@ -147,7 +147,7 @@ wait_for_sync ${MD_NUM} || \
     error_exit "Failed to synchronize array"
 
 MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
-mdadm --detail /dev/${MD_NUM} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG1}
+mdadm --detail /dev/${MD_NUM} | sed '/Update Time/D;/Events/D;/State/D' | tee ${MD_LOG1}
 if ! diff -u "${START_LOG}" "${MD_LOG1}" ; then
     error_exit "current ${MD_NUM} state differs after test but should be identical to initial state"
 fi
@@ -223,7 +223,7 @@ wait_for_sync ${MD_NUM} || \
     error_exit "Failed to synchronize array"
 
 MD_LOG2="/tmp/monitor_${MD_NAME}_step2.log"
-mdadm --detail /dev/${MD_NUM} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG2}
+mdadm --detail /dev/${MD_NUM} | sed '/Update Time/D;/Events/D;/State/D' | tee ${MD_LOG2}
 if ! diff -u "${START_LOG}" "${MD_LOG2}" ; then
     error_exit "current ${MD_NUM} state differs after test but should be identical to initial state"
 fi
