@@ -15,7 +15,7 @@ logger "Monitor Testcase 14: Disk quiesce/resume"
 
 stop_md $MD_NUM
 
-activate_dasds
+activate_devices
 
 clear_metadata
 

@@ -15,7 +15,7 @@ logger "Monitor Testcase 13: Pick up failed array"
 
 stop_md $MD_NUM
 
-activate_dasds
+activate_devices
 
 clear_metadata
 

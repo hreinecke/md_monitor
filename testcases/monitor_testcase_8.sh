@@ -13,7 +13,7 @@ SLEEPTIME=30
 
 stop_md $MD_NUM
 
-activate_dasds
+activate_devices
 
 clear_metadata
 

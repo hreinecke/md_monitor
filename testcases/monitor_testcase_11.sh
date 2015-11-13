@@ -13,7 +13,7 @@ NUM_STEPS=8
 
 stop_md $MD_NUM
 
-activate_dasds 16
+activate_devices 16
 
 clear_metadata
 

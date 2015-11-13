@@ -230,7 +230,8 @@ function setup_one_dasd() {
 }
 
 function activate_dasds() {
-    local devno_max=$1
+    local userid=$1
+    local devno_max=$2
     local devno;
     local dasd;
     local DEVNO_LEFT_START="0xa010"
@@ -239,13 +240,7 @@ function activate_dasds() {
     local DEVNO_RIGHT_END="0xa1c8"
     local i=0
 
-    if ! zgrep -q VMCP=y /proc/config.gz ; then
-	if ! grep -q vmcp /proc/modules ; then
-	    modprobe vmcp
-	fi
-    fi
     [ -f /proc/mdstat ] || modprobe raid10
-    userid=$(vmcp q userid 2> /dev/null | cut -f 1 -d ' ')
     if [ "$userid" = "LINUX025" ] ; then
         # linux025 layout
 	DEVNO_LEFT_START="0x0210"
@@ -288,12 +283,12 @@ function activate_dasds() {
 }
 
 function activate_scsi() {
-    local devno_max=$1
+    local hostname=$1
+    local devno_max=$2
     local devno;
     local dasd;
     local i=0
 
-    hostname=$(hostname)
     if [ "$hostname" = "elnath" ] ; then
 	SCSIID_LEFT="3600a098032466955593f416531744a39 3600a098032466955593f416531744a41 3600a098032466955593f416531744a43 3600a098032466955593f416531744a45"
 	SCSIID_RIGHT="3600a098032466955593f41653174496c 3600a098032466955593f416531744a2d 3600a098032466955593f416531744a42 3600a098032466955593f416531744a44"
@@ -344,11 +339,21 @@ function activate_scsi() {
 
 function activate_devices()
 {
-    hostname=$(hostname)
-    if [ "$hostname" = "elnath" ] ; then
-	activate_scsi
+    local num_devs=$1
+
+    arch=$(arch)
+    if [ "$arch" = "s390x" ] ; then
+	if ! zgrep -q VMCP=y /proc/config.gz ; then
+	    if ! grep -q vmcp /proc/modules ; then
+		modprobe vmcp
+	    fi
+	fi
+	hostname=$(vmcp q userid 2> /dev/null | cut -f 1 -d ' ')
     else
-	activate_dasds
+	hostname=$(hostname)
+    fi
+    if ! activate_scsi $hostname $num_devs ; then
+	activate_dasds $hostname $num_devs
     fi
 }
 
