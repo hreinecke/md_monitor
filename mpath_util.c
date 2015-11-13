@@ -32,6 +32,7 @@
 
 #define DEFAULT_SOCKET "/org/kernel/linux/storage/multipathd"
 pthread_t mpath_thread;
+static unsigned long mpath_timeout;
 
 /*
  * connect to a unix domain socket
@@ -334,7 +335,6 @@ ssize_t mpath_status(char **reply, int timeout)
 
 void *mpath_status_thread (void *ctx)
 {
-	int sig_timeout = *(unsigned long *)ctx;
 	struct device_monitor *dev;
 	enum device_io_status io_status;
 	enum md_rdev_status md_status, new_status;
@@ -346,7 +346,7 @@ void *mpath_status_thread (void *ctx)
 	int rc;
 
 	while (1) {
-		len = mpath_status(&reply, sig_timeout);
+		len = mpath_status(&reply, mpath_timeout);
 		if (len < 0) {
 			warn("error while reading multipath status, exit");
 			break;
@@ -434,7 +434,7 @@ void *mpath_status_thread (void *ctx)
 			     device_io_print_state(io_status));
 		}
 		free(reply);
-		tmo.tv_sec = sig_timeout;
+		tmo.tv_sec = mpath_timeout;
 		tmo.tv_nsec = 0;
 		info("mpath: waiting %ld seconds ...", (long)tmo.tv_sec);
 		rc = sigtimedwait(&thread_sigmask, NULL, &tmo);
@@ -457,8 +457,9 @@ int start_mpath_check(unsigned long timeout)
 	int rc;
 
 	info("Start mpath status thread");
+	mpath_timeout = timeout;
 
-	rc = pthread_create(&mpath_thread, NULL, mpath_status_thread, &timeout);
+	rc = pthread_create(&mpath_thread, NULL, mpath_status_thread, NULL);
 	if (rc) {
 		err("Failed to start mpath update thread: %m");
 		mpath_thread = 0;

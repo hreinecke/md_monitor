@@ -36,6 +36,8 @@
 #include <sys/time.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <limits.h>
+
 #include <poll.h>
 #include <linux/netlink.h>
 #include <linux/major.h>
@@ -81,7 +83,7 @@ static char logname[MD_NAMELEN];
 static int use_syslog;
 static int fail_mirror_side = 1;
 static int stop_on_sync = 1;
-static int checker_timeout = 1;
+static unsigned long checker_timeout = 1;
 static pid_t monitor_pid;
 FILE *logfd;
 
@@ -2942,7 +2944,8 @@ int main(int argc, char *argv[])
 			break;
 		case 't':
 			checker_timeout = strtoul(optarg, NULL, 10);
-			if (checker_timeout < 1) {
+			if (checker_timeout < 1 &&
+			    checker_timeout == ULONG_MAX) {
 				err("Invalid checker timeout '%s'",
 				    optarg);
 				exit(1);
