@@ -83,7 +83,7 @@ for d in ${DEVICES_LEFT[@]} ; do
 	error_exit "Cannot resume /dev/${d}"
 done
 
-wait_for_md_running $MONITOR_TIMEOUT
+wait_for_md_running_left $MONITOR_TIMEOUT
 
 echo "$(date) MD status"
 mdadm --detail /dev/${MD_NUM}

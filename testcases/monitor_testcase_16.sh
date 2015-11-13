@@ -48,7 +48,7 @@ while true ; do
     fi
 done
 
-wait_for_md_running $MONITOR_TIMEOUT
+wait_for_md_running_left $MONITOR_TIMEOUT
 
 sleep 2
 # Stop z/VM guest

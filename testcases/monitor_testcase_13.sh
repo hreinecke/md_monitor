@@ -70,7 +70,7 @@ done
 echo "$(date) Start md_monitor"
 MONITOR_PID=$(/sbin/md_monitor -y -p 7 -d -s)
 
-wait_for_md_running $MONITOR_TIMEOUT
+wait_for_md_running_left $MONITOR_TIMEOUT
 
 echo "$(date) MD status"
 mdadm --detail /dev/${MD_NUM}
@@ -106,7 +106,7 @@ if [ "$detach_other_half" ] ; then
 	break;
     done
 
-    wait_for_md_running $MONITOR_TIMEOUT
+    wait_for_md_running_right $MONITOR_TIMEOUT
     
     wait_for_sync ${MD_NUM} || \
 	error_exit "Failed to synchronize array"

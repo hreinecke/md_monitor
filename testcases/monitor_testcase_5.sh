@@ -98,7 +98,7 @@ for dev in /sys/devices/css0/defunct/0.0.* ; do
 	error_exit "Cannot attach device ${devno#0.0.}"
 done
 
-wait_for_md_running $MONITOR_TIMEOUT
+wait_for_md_running_left $MONITOR_TIMEOUT
 
 echo "$(date) MD status"
 mdadm --detail /dev/${MD_NUM}
@@ -134,7 +134,7 @@ while true ; do
     fi
 done
 
-wait_for_md_running $MONITOR_TIMEOUT
+wait_for_md_running_right $MONITOR_TIMEOUT
     
 echo "$(date) Stop I/O test"
 stop_iotest
