@@ -149,7 +149,7 @@ function stop_md() {
     local md_detail
     local cur_md=$1
 
-    if ! grep -q ${cur_md} /proc/mdstat ; then
+    if ! grep -q ${cur_md} /proc/mdstat 2> /dev/null ; then
 	return
     fi
     check_md_log stop
@@ -307,9 +307,21 @@ function activate_scsi() {
 	paths=$(multipathd -k"show map $scsiid topology" | \
 	        sed -n 's/.*[0-9]:[0-9]:[0-9]:[0-9] \(sd[a-z]*\) .*/\1/p')
 	for path in ${paths} ; do
-	    read state < /sys/block/$path/device/state
+	    devpath="/sys/block/$path/device"
+	    shost_left=$(cd -P $devpath; echo $PWD | sed -n 's/.*\(host[0-9]*\).*/\1/p')
+	    read state < $devpath/state
 	    if [ "$state" != "running" ] ; then
 		error_exit "SCSI device $path in state $state, cannot continue"
+	    fi
+	    shost_found=0
+	    for shost in ${SHOSTS_LEFT[@]} ; do
+		if [ "$shost" = "$shost_left" ] ; then
+		    shost_found=1
+		    break;
+		fi
+	    done
+	    if [ "$shost_found" = "0" ] ; then
+		SHOSTS_LEFT+=("$shost_left")
 	    fi
 	    mpath_state=$(multipathd -k'show paths format "%d %t %T"' | sed -n "s/$path \(.*\)/\1/p")
 	    if [ "$mpath_state" != "active ready " ] ; then
@@ -325,9 +337,31 @@ function activate_scsi() {
 	paths=$(multipathd -k"show map $scsiid topology" | \
 	        sed -n 's/.*[0-9]:[0-9]:[0-9]:[0-9] \(sd[a-z]*\) .*/\1/p')
 	for path in ${paths} ; do
-	    read state < /sys/block/$path/device/state
+	    devpath="/sys/block/$path/device"
+	    shost_right=$(cd -P $devpath; echo $PWD | sed -n 's/.*\(host[0-9]*\).*/\1/p')
+	    read state < $devpath/state
 	    if [ "$state" != "running" ] ; then
 		error_exit "SCSI device $path in state $state, cannot continue"
+	    fi
+	    shost_found=0
+	    for shost in ${SHOSTS_LEFT[@]} ; do
+		if [ "$shost" = "$shost_right" ] ; then
+		    shost_found=1
+		    break;
+		fi
+	    done
+	    if [ "$shost_found" = "1" ] ; then
+		error_exit "SCSI $shost_right already attached to the left side"
+	    fi
+	    shost_found=0
+	    for shost in ${SHOSTS_RIGHT[@]} ; do
+		if [ "$shost" = "$shost_right" ] ; then
+		    shost_found=1
+		    break;
+		fi
+	    done
+	    if [ "$shost_found" = "0" ] ; then
+		SHOSTS_LEFT+=("$shost_right")
 	    fi
 	    mpath_state=$(multipathd -k'show paths format "%d %t %T"' | sed -n "s/$path \(.*\)/\1/p")
 	    if [ "$mpath_state" != "active ready " ] ; then
