@@ -25,12 +25,11 @@ function attach_dasd() {
     fi
 }
 
-function online_scsi() {
-    local sdev=$1
+function attach_scsi() {
+    local devno=$1
 
-    if ! echo running > /sys/block/$sdev/device/state ; then
-	error_exit "Cannot set device $sdev online"
-    fi
+    vmcp att ${devno##*.} \* || \
+	error_exit "Cannot attach device $devno"
 }
 
 stop_md $MD_NUM
@@ -73,12 +72,14 @@ if [ -n "$DEVNOS_LEFT" ] ; then
 	break;
     done
 else
-    echo "$(date) setting first half offline ..."
-    for sdev in ${SDEVS_LEFT[@]} ; do
-	if ! echo offline > /sys/block/$sdev/device/state ; then
-	    error_exit "Cannot set device $sdev offline"
-	fi
-	push_recovery_fn "online_scsi $sdev"
+    echo "$(date) Detach HBA on first half ..."
+    for shost in ${SHOSTS_LEFT[@]} ; do
+	hostpath=$(cd -P /sys/class/scsi_host/$shost)
+	ccwpath=${devpath%/host*}
+	devno=${ccwpath##*/}
+	vmcp det ${devno##*.} || \
+	    error_exit "Cannot detach device ${devno##*.}"
+	push_recovery_fn "attach_scsi ${devno##*.}"
     done
 fi
 
@@ -119,11 +120,13 @@ if [ "$detach_other_half" ] ; then
 	done
     else
 	echo "$(date) setting second half offline ..."
-	for sdev in ${SDEVS_RIGHT[@]} ; do
-	    if ! echo offline > /sys/block/$sdev/device/state ; then
-		error_exit "Cannot set device $sdev offline"
-	    fi
-	    push_recovery_fn "online_scsi $sdev"
+	for shost in ${SHOSTS_RIGHT[@]} ; do
+	    hostpath=$(cd -P /sys/class/scsi_host/$shost)
+	    ccwpath=${devpath%/host*}
+	    devno=${ccwpath##*/}
+	    vmcp det ${devno##*.} || \
+		error_exit "Cannot detach device ${devno##*.}"
+	    push_recovery_fn "attach_scsi ${devno##*.}"
 	done
     fi
 

@@ -305,7 +305,7 @@ function activate_scsi() {
     fi
     for scsiid in ${SCSIID_LEFT} ; do
 	paths=$(multipathd -k"show map $scsiid topology" | \
-	        sed -n 's/.*[0-9]:[0-9]:[0-9]:[0-9] \(sd[a-z]*\) .*/\1/p')
+	        sed -n 's/.*[0-9]*:[0-9]*:[0-9]*:[0-9]* \(sd[a-z]*\) .*/\1/p')
 	for path in ${paths} ; do
 	    devpath="/sys/block/$path/device"
 	    shost_left=$(cd -P $devpath; echo $PWD | sed -n 's/.*\(host[0-9]*\).*/\1/p')
@@ -335,7 +335,7 @@ function activate_scsi() {
 
     for scsiid in ${SCSIID_RIGHT} ; do
 	paths=$(multipathd -k"show map $scsiid topology" | \
-	        sed -n 's/.*[0-9]:[0-9]:[0-9]:[0-9] \(sd[a-z]*\) .*/\1/p')
+	        sed -n 's/.*[0-9]*:[0-9]*:[0-9]*:[0-9]* \(sd[a-z]*\) .*/\1/p')
 	for path in ${paths} ; do
 	    devpath="/sys/block/$path/device"
 	    shost_right=$(cd -P $devpath; echo $PWD | sed -n 's/.*\(host[0-9]*\).*/\1/p')
