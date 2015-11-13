@@ -42,23 +42,16 @@ if ! wait_for_sync ${MD_NUM} ; then
     error_exit "First half still faulty"
 fi
 
-MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
-mdadm --detail /dev/${MD_NUM} | sed '/Update Time/D;/Events/D;/State/D' | tee ${MD_LOG1}
-if ! diff -u "${START_LOG}" "${MD_LOG1}" ; then
-    error_exit "current ${MD_NUM} state differs after test but should be identical to initial state"
-fi
+check_md_log step1
+
 echo "Fail second half ..."
 mdadm --manage /dev/${MD_NUM} --fail ${DEVICES_RIGHT[@]}
 wait_md ${MD_NUM}
 if ! wait_for_sync ${MD_NUM} ; then
     error_exit "Second half still faulty"
 fi
-MD_LOG2="/tmp/monitor_${MD_NAME}_step2.log"
-mdadm --detail /dev/${MD_NUM} | sed '/Update Time/D;/Events/D;/State/D' | tee ${MD_LOG2}
-if ! diff -u "${START_LOG}" "${MD_LOG2}" ; then
-    error_exit "current ${MD_NUM} state differs after test but should be identical to initial state"
-fi
-rm -f ${MD_LOG1} ${MD_LOG2}
+
+check_md_log step2
 
 echo "Umount filesystem ..."
 umount /mnt

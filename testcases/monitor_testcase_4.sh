@@ -107,11 +107,7 @@ echo "$(date) Wait for sync"
 wait_for_sync ${MD_NUM} || \
     error_exit "Failed to synchronize array"
 
-MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
-mdadm --detail /dev/${MD_NUM} | sed '/Update Time/D;/Events/D;/State/D' | tee ${MD_LOG1}
-if ! diff -u "${START_LOG}" "${MD_LOG1}" ; then
-    error_exit "current ${MD_NUM} state differs after test but should be identical to initial state"
-fi
+check_md_log step1
 
 if [ "$detach_other_half" ] ; then
     if [ -n "$DEVNOS_RIGHT" ] ; then
@@ -148,7 +144,7 @@ if [ "$detach_other_half" ] ; then
     wait_for_sync ${MD_NUM} || \
 	error_exit "Failed to synchronize array"
 
-    mdadm --detail /dev/${MD_NUM}
+    check_md_log step2
 fi
 
 logger "${MD_NAME}: success"

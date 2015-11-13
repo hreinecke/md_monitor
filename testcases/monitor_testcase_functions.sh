@@ -68,7 +68,7 @@ function start_md() {
     mdadm --wait ${MD_DEVNAME} || true
 
     START_LOG="/tmp/monitor_${MD_NAME}_mdstat_start.log"
-    mdadm --detail ${MD_DEVNAME} | sed '/Update Time/D;/Events/D;/State/D' | tee ${START_LOG}
+    mdadm --detail ${MD_DEVNAME} | sed -n '/Devices/p' | tee ${START_LOG}
     echo "POLICY action=re-add" > /etc/mdadm.conf
     echo "AUTO -all" >> /etc/mdadm.conf
     mdadm --brief --detail ${MD_DEVNAME} >> /etc/mdadm.conf
@@ -98,6 +98,19 @@ function start_md() {
     if [ -n "$trapcmd" ] ; then
 	trap "$trapcmd" EXIT
     fi
+}
+
+function check_md_log() {
+    local prefix=$1
+    local logfile
+
+    [ -z "${START_LOG}" ] && return
+    logfile="/tmp/monitor_${MD_NAME}_${prefix}.log"
+    mdadm --detail /dev/${MD_NUM} | sed -n '/Devices/p' | tee ${logfile}
+    if ! diff -u "${START_LOG}" "${logfile}" ; then
+	error_exit "current ${MD_NUM} state differs after test but should be identical to initial state"
+    fi
+    rm -f $logfile
 }
 
 function stop_monitor() {
@@ -139,20 +152,12 @@ function stop_md() {
     if ! grep -q ${cur_md} /proc/mdstat ; then
 	return
     fi
-    STOP_LOG="/tmp/monitor_${MD_NAME}_mdstat_stop.log"
-    if [ -n "${START_LOG}" ] ; then
-	mdadm --wait /dev/${cur_md} || true
-	mdadm --detail /dev/${cur_md} | sed '/Update Time/D;/Events/D;/State/D' | tee ${STOP_LOG}
-	if ! diff -u ${START_LOG} ${STOP_LOG} ; then
-	    echo "MD array configuration inconsistent"
-	    exit 1
-	fi
-    fi
+    check_md_log stop
     trap - EXIT
     stop_monitor
     stop_mdadm
     stop_iostat
-    rm -f ${START_LOG} ${STOP_LOG}
+    rm -f ${START_LOG}
     for md in $(sed -n 's/^\(md[0-9]*\) .*/\1/p' /proc/mdstat) ; do
 	if [ "$md" = "$cur_md" ] ; then
 	    if grep -q /dev/$md /proc/mounts ; then
