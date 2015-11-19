@@ -293,17 +293,19 @@ function activate_scsi() {
 	SCSIID_LEFT="3600a098032466955593f416531744a39 3600a098032466955593f416531744a41 3600a098032466955593f416531744a43 3600a098032466955593f416531744a45"
 	SCSIID_RIGHT="3600a098032466955593f41653174496c 3600a098032466955593f416531744a2d 3600a098032466955593f416531744a42 3600a098032466955593f416531744a44"
     elif [ "$hostname" = "LINUX042" ] ; then
-	SCSIID_LEFT="36005076305ffc73a00000000000013da 36005076305ffc73a00000000000013db"
-	SCSIID_RIGHT="36005076305ffc73a00000000000013c3 36005076305ffc73a000000000000100c"
+	SCSIID_LEFT="36005076305ffc73a00000000000013c3 36005076305ffc73a000000000000105d 36005076305ffc73a000000000000105c 36005076305ffc73a000000000000115c 36005076305ffc73a000000000000100c 36005076305ffc73a000000000000105b 36005076305ffc73a000000000000115b 36005076305ffc73a000000000000105a 36005076305ffc73a000000000000115a 36005076305ffc73a000000000000115d"
+	SCSIID_RIGHT="36005076305ffc73a00000000000013db 36005076305ffc73a00000000000013da 36005076305ffc73a000000000000115f 36005076305ffc73a0000000000001167 36005076305ffc73a000000000000115e 36005076305ffc73a0000000000001166 36005076305ffc73a0000000000001165 36005076305ffc73a0000000000001164 36005076305ffc73a0000000000001163 36005076305ffc73a0000000000001162"
     else
 	error_exit "Cannot determine SCSI layout for $hostname"
     fi
 
-    # Use 8 DASDs per side per default
+    # Use 8 devices per side per default
     if [ -z "$devno_max" ] ; then
 	devno_max=8
     fi
+    devno=0
     for scsiid in ${SCSIID_LEFT} ; do
+	[ $devno -ge $devno_max ] && break
 	paths=$(multipathd -k"show map $scsiid topology" | \
 	        sed -n 's/.*[0-9]*:[0-9]*:[0-9]*:[0-9]* \(sd[a-z]*\) .*/\1/p')
 	for path in ${paths} ; do
@@ -323,7 +325,7 @@ function activate_scsi() {
 	    if [ "$shost_found" = "0" ] ; then
 		SHOSTS_LEFT+=("$shost_left")
 	    fi
-	    mpath_state=$(multipathd -k'show paths format "%d %t %T"' | sed -n "s/$path \(.*\)/\1/p")
+	    mpath_state=$(multipathd -k'show paths format "%d %t %T"' | sed -n "s/$path  *\(.*\)/\1/p")
 	    if [ "$mpath_state" != "active ready " ] ; then
 		error_exit "Multipath device $path in state $mpath_state, cannot continue"
 	    fi
@@ -331,9 +333,12 @@ function activate_scsi() {
 	done
 	mpath_dev=$(multipathd -k'show multipaths' | sed -n "s/.* \(dm-[0-9]*\) *$scsiid/\1/p")
 	DEVICES_LEFT+=("/dev/$mpath_dev")
+	(( devno++ )) || true
     done
 
+    devno=0
     for scsiid in ${SCSIID_RIGHT} ; do
+	[ $devno -ge $devno_max ] && break
 	paths=$(multipathd -k"show map $scsiid topology" | \
 	        sed -n 's/.*[0-9]*:[0-9]*:[0-9]*:[0-9]* \(sd[a-z]*\) .*/\1/p')
 	for path in ${paths} ; do
@@ -351,7 +356,7 @@ function activate_scsi() {
 		fi
 	    done
 	    if [ "$shost_found" = "1" ] ; then
-		error_exit "SCSI $shost_right already attached to the left side"
+		error_exit "SCSI $shost_right for SCSI device $path already attached to the left side"
 	    fi
 	    shost_found=0
 	    for shost in ${SHOSTS_RIGHT[@]} ; do
@@ -361,9 +366,9 @@ function activate_scsi() {
 		fi
 	    done
 	    if [ "$shost_found" = "0" ] ; then
-		SHOSTS_LEFT+=("$shost_right")
+		SHOSTS_RIGHT+=("$shost_right")
 	    fi
-	    mpath_state=$(multipathd -k'show paths format "%d %t %T"' | sed -n "s/$path \(.*\)/\1/p")
+	    mpath_state=$(multipathd -k'show paths format "%d %t %T"' | sed -n "s/$path  *\(.*\)/\1/p")
 	    if [ "$mpath_state" != "active ready " ] ; then
 		error_exit "Multipath device $path in state $mpath_state, cannot continue"
 	    fi
@@ -371,6 +376,7 @@ function activate_scsi() {
 	done
 	mpath_dev=$(multipathd -k'show multipaths' | sed -n "s/.* \(dm-[0-9]*\) *$scsiid/\1/p")
 	DEVICES_RIGHT+=("/dev/$mpath_dev")
+	(( devno++ )) || true
     done
 }
 
