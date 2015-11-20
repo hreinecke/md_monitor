@@ -49,7 +49,7 @@ function stop_extra_mds_1() {
 push_recovery_fn stop_extra_mds_1
 wait_md ${MD2_NAME}
 MD_LOG2="/tmp/monitor_${MD_NAME}_step2.log"
-mdadm --detail /dev/${MD2_NAME} | sed '/Update Time/D;/Events/D;/State/D' | tee ${MD_LOG2}
+mdadm --detail /dev/${MD2_NAME} | sed -n '/Devices/p' | tee ${MD_LOG2}
 mdadm --brief --detail /dev/${MD2_NAME} >> /etc/mdadm.conf
 sleep 1
 echo -n "MonitorStatus on /dev/${MD2_NAME}: "
@@ -81,7 +81,7 @@ if [ -n "$devlist" ] ; then
     push_recovery_fn stop_extra_mds_2
     wait_md ${MD3_NAME}
     MD_LOG4="/tmp/monitor_${MD_NAME}_step4.log"
-    mdadm --detail /dev/${MD3_NAME} | sed '/Update Time/D;/Events/D;/State/D' | tee ${MD_LOG4}
+    mdadm --detail /dev/${MD3_NAME} | sed -n '/Devices/p' | tee ${MD_LOG4}
     mdadm --brief --detail /dev/${MD3_NAME} >> /etc/mdadm.conf
     sleep 1
     echo -n "MonitorStatus on /dev/${MD3_NAME}: "
@@ -108,7 +108,7 @@ while [ $step -lt $NUM_STEPS ] ; do
 	|| error_exit "Cannot assemble MD array md${MD}"
     wait_md md${MD}
     MD_LOG6="/tmp/monitor_${MD_NAME}_step6.log"
-    mdadm --detail /dev/md${MD} | sed '/Update Time/D;/Events/D;/State/D' | tee ${MD_LOG6}
+    mdadm --detail /dev/md${MD} | sed -n '/Devices/p' | tee ${MD_LOG6}
     if [ ${MD} -eq 1 ] ; then
 	MD_LOGN=${START_LOG}
     elif [ ${MD} -eq 2 ] ; then
