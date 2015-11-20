@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Testcase 4: Disk attach/detach
-#             (Disk online/offline for zFCP)
+#             (HBA attach/detach for zFCP)
 #
 
 set -o errexit
@@ -26,10 +26,16 @@ function attach_dasd() {
 }
 
 function attach_scsi() {
-    local devno=$1
+    local vdev=$1
+    local rdev=$2
 
-    vmcp att ${devno##*.} \* || \
-	error_exit "Cannot attach device $devno"
+    if [ -n "$rdev" ] ; then
+	vmcp att ${rdev} \* ${vdev} || \
+	    error_exit "Cannot attach device $rdev to $vdev"
+    else
+	vmcp att ${vdev} || \
+	    error_exit "Cannot attach device $vdev"
+    fi
 }
 
 stop_md $MD_NUM
@@ -74,12 +80,14 @@ if [ -n "$DEVNOS_LEFT" ] ; then
 else
     echo "$(date) Detach HBA on first half ..."
     for shost in ${SHOSTS_LEFT[@]} ; do
-	hostpath=$(cd -P /sys/class/scsi_host/$shost)
-	ccwpath=${devpath%/host*}
+	hostpath=$(cd -P /sys/class/scsi_host/$shost; echo $PWD)
+	ccwpath=${hostpath%%/host*}
 	devno=${ccwpath##*/}
-	vmcp det ${devno##*.} || \
-	    error_exit "Cannot detach device ${devno##*.}"
-	push_recovery_fn "attach_scsi ${devno##*.}"
+	vdev=${devno##*.}
+	rdev=$(vmcp q v ${vdev} | sed -n 's/.*ON FCP  *\([0-9A-F]*\) CHPID.*/\1/p')
+	vmcp det ${vdev} || \
+	    error_exit "Cannot detach device ${vdev}"
+	push_recovery_fn "attach_scsi ${vdev} ${rdev}"
     done
 fi
 
@@ -119,14 +127,16 @@ if [ "$detach_other_half" ] ; then
 	    break;
 	done
     else
-	echo "$(date) setting second half offline ..."
+	echo "$(date) detach HBAs on second half ..."
 	for shost in ${SHOSTS_RIGHT[@]} ; do
-	    hostpath=$(cd -P /sys/class/scsi_host/$shost)
-	    ccwpath=${devpath%/host*}
+	    hostpath=$(cd -P /sys/class/scsi_host/$shost; echo $PWD)
+	    ccwpath=${hostpath%%/host*}
 	    devno=${ccwpath##*/}
-	    vmcp det ${devno##*.} || \
-		error_exit "Cannot detach device ${devno##*.}"
-	    push_recovery_fn "attach_scsi ${devno##*.}"
+	    vdev=${devno##*.}
+	    rdev=$(vmcp q v ${vdev} | sed -n 's/.*ON FCP  *\([0-9A-F]*\) CHPID.*/\1/p')
+	    vmcp det ${vdev} || \
+		error_exit "Cannot detach device ${vdev}"
+	    push_recovery_fn "attach_scsi ${vdev} ${rdev}"
 	done
     fi
 
