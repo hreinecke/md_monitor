@@ -57,12 +57,16 @@ echo "Monitor status: $md_status"
 wait_md ${MD_NUM}
 echo "Add new device on left side"
 for d in ${DEVICES_LEFT[3]} ; do
-    if ! dasdfmt -p -y -b 4096 -f ${d%1} ; then
-	error_exit "Cannot format device ${d%1}"
-    fi
-    sleep 2
-    if ! fdasd -a ${d%1} ; then
-	error_exit "Cannot partition device ${d%1}"
+    if [ -n "$DEVNOS_LEFT" ] ; then
+	if ! dasdfmt -p -y -b 4096 -f ${d%1} ; then
+	    error_exit "Cannot format device ${d%1}"
+	fi
+	sleep 2
+	if ! fdasd -a ${d%1} ; then
+	    error_exit "Cannot partition device ${d%1}"
+	fi
+    else
+	dd if=/dev/zero of=${d} bs=1M count=64
     fi
     sleep 2
     if ! mdadm --manage /dev/${MD_NUM} --add --failfast $d ; then
