@@ -1692,7 +1692,7 @@ static void discover_md_components(struct md_monitor *md)
 	close(ioctl_fd);
 }
 
-static void fail_md(struct md_monitor *md_dev)
+static int fail_md(struct md_monitor *md_dev)
 {
 	const char *md_name = udev_device_get_sysname(md_dev->device);
 	char cmdline[256];
@@ -1708,13 +1708,13 @@ static void fail_md(struct md_monitor *md_dev)
 	if (!md_dev->pending_side) {
 		pthread_mutex_unlock(&md_dev->status_lock);
 		warn("%s: no pending side", md_name);
-		return;
+		return 0;
 	}
 	if (md_dev->degraded & (1 << md_dev->pending_side)) {
 		info("%s: mirror side %d already failed", md_name,
 		     (md_dev->pending_side >> 1));
 		pthread_mutex_unlock(&md_dev->status_lock);
-		return;
+		return 0;
 	}
 	/* Set DASD timeout to abort all outstanding I/O */
 	if (md_dev->pending_status == TIMEOUT) {
@@ -1759,15 +1759,18 @@ static void fail_md(struct md_monitor *md_dev)
 			}
 		}
 		pthread_mutex_unlock(&md_dev->device_lock);
+	}
+	if (!rc || rc == 512) {
 		pthread_mutex_lock(&md_dev->status_lock);
 		md_dev->degraded |= md_dev->pending_side;
 		md_dev->pending_side = 0;
 		md_dev->pending_status = UNKNOWN;
 		pthread_mutex_unlock(&md_dev->status_lock);
 	}
+	return rc == 512 ? -EBUSY : -EIO;
 }
 
-static void reset_md(struct md_monitor *md_dev)
+static int reset_md(struct md_monitor *md_dev)
 {
 	const char *md_name = udev_device_get_sysname(md_dev->device);
 	char cmdline[256];
@@ -1778,19 +1781,19 @@ static void reset_md(struct md_monitor *md_dev)
 	if (!md_dev->pending_side) {
 		pthread_mutex_unlock(&md_dev->status_lock);
 		warn("%s: no pending side", md_name);
-		return;
+		return 0;
 	}
 	pthread_mutex_unlock(&md_dev->status_lock);
 	pthread_mutex_lock(&md_dev->device_lock);
 	list_for_each_entry(dev, &md_dev->children, siblings) {
 		if (reset_component(dev) < 0) {
 			pthread_mutex_unlock(&md_dev->device_lock);
-			return;
+			return 0;
 		}
 	}
 	pthread_mutex_unlock(&md_dev->device_lock);
 	if (!md_name)
-		return;
+		return -EINVAL;
 
 	sprintf(cmdline, "mdadm --manage /dev/%s --re-add faulty", md_name);
 	dbg("%s: call 'system' '%s'", md_name, cmdline);
@@ -1805,6 +1808,7 @@ static void reset_md(struct md_monitor *md_dev)
 		md_dev->pending_status = UNKNOWN;
 		pthread_mutex_unlock(&md_dev->status_lock);
 	}
+	return rc == 512 ? -EBUSY : -EIO;
 }
 
 static void remove_md(struct md_monitor *md_dev)
@@ -2190,7 +2194,7 @@ static void *mdadm_exec_thread (void *ctx)
 		if (list_empty(&active_list))
 			continue;
 		list_for_each_entry_safe(md_dev, tmp, &active_list, pending) {
-			int do_fail = 0;
+			int do_fail = 0, rc;
 
 			if (gettimeofday(&start_time, NULL) < 0)
 				start_time.tv_sec = 0;
@@ -2203,22 +2207,28 @@ static void *mdadm_exec_thread (void *ctx)
 			} else if (md_dev->pending_status != IN_SYNC) {
 				pthread_mutex_unlock(&md_dev->status_lock);
 				do_fail = 1;
-				fail_md(md_dev);
+				rc = fail_md(md_dev);
 			} else {
 				pthread_mutex_unlock(&md_dev->status_lock);
-				reset_md(md_dev);
+				rc = reset_md(md_dev);
 			}
 
-			if (start_time.tv_sec &&
-			    gettimeofday(&end_time, NULL) == 0) {
-				timersub(&end_time, &start_time, &diff);
-				info("%s: all devices %s after "
-				     "%lu.%06lu secs", md_dev->dev_name,
-				     do_fail ? "failed" : "reset",
-				     diff.tv_sec, diff.tv_usec);
+			if (rc < 0) {
+				info("%s: mdadm returned %d",
+				     md_dev->dev_name, rc);
 			} else {
-				info("%s: all devices %s", md_dev->dev_name,
-				     do_fail ? "failed" : "reset");
+				if (start_time.tv_sec &&
+				    gettimeofday(&end_time, NULL) == 0) {
+					timersub(&end_time, &start_time, &diff);
+					info("%s: all devices %s after "
+					     "%lu.%06lu secs", md_dev->dev_name,
+					     do_fail ? "failed" : "reset",
+					     diff.tv_sec, diff.tv_usec);
+				} else {
+					info("%s: all devices %s",
+					     md_dev->dev_name,
+					     do_fail ? "failed" : "reset");
+				}
 			}
 		}
 	}
