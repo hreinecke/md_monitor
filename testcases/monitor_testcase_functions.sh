@@ -632,7 +632,7 @@ function wait_for_monitor() {
     local MD_NUM=$1
     local oldstatus=$2
     local timeout=$3
-    local newstatus
+    local newstatus tmpstatus
 
     echo "Wait for md_monitor to pick up changes"
     starttime=$(date +%s)
@@ -644,6 +644,10 @@ function wait_for_monitor() {
 	    break;
 	fi
 	sleep 1
+	if [ -n "$tmpstatus" ] && [ $tmpstatus != $newstatus ] ; then
+	    endtime=$(date +%s --date="+ $timeout sec")
+	fi
+	tmpstatus=$newstatus
 	runtime=$(date +%s)
     done
     elapsed=$(( $runtime - $starttime ))
