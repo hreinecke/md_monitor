@@ -41,10 +41,22 @@ echo "$(date) Run I/O test"
 run_iotest /mnt;
 
 echo "$(date) Detach disk on first half ..."
-for devno in ${DEVNOS_LEFT} ; do
-    vmcp det ${devno##*.}
-    break;
-done
+if [ -n "$DEVNOS_LEFT" ] ; then
+    for devno in ${DEVNOS_LEFT} ; do
+	vmcp det ${devno##*.}
+	break;
+    done
+else
+    for wwid in ${SCSIID_LEFT} ; do
+	paths=$(multipathd -k"show map $wwid topology" | \
+	        sed -n 's/.*[0-9]*:[0-9]*:[0-9]*:[0-9]* \(sd[a-z]*\) .*/\1/p')
+	for path in ${paths} ; do
+	    echo 1 > /sys/block/$path/device/delete || \
+		error_exit "Cannot remove device ${path} from ${wwid}"
+	done
+	break;
+    done
+fi
 
 wait_for_md_failed $MONITOR_TIMEOUT
 
@@ -58,14 +70,21 @@ sleep 10
 mdadm --detail /dev/${MD_NUM}
 
 echo "$(date) Re-attach disk on first half ..."
-for devno in $DEVNOS_LEFT ; do
-    if [ "$userid" = "LINUX025" ] ; then
-	vmcp link \* ${devno##*.} ${devno##*.}
-    else
-	vmcp att ${devno##*.} \*
-    fi
-    break
-done
+if [ -n "$DEVNOS_LEFT" ] ; then
+    for devno in $DEVNOS_LEFT ; do
+	if [ "$userid" = "LINUX025" ] ; then
+	    vmcp link \* ${devno##*.} ${devno##*.}
+	else
+	    vmcp att ${devno##*.} \*
+	fi
+	break
+    done
+else
+    for shost in ${SHOSTS_LEFT[@]} ; do
+	echo '- - -' > /sys/class/scsi_host/$shost/scan || \
+	    error_error "Failed to rescan host $shost"
+    done
+fi
 
 echo "$(date) Start md_monitor"
 MONITOR_PID=$(/sbin/md_monitor -y -p 7 -d -s)
@@ -85,11 +104,23 @@ wait_for_sync ${MD_NUM} || \
 mdadm --detail /dev/${MD_NUM}
 
 if [ "$detach_other_half" ] ; then
-    echo "Detach disk on second half ..."
-    for devno in ${DEVNOS_RIGHT} ; do
-	vmcp det ${devno##*.}
-	break;
-    done
+    if [ -n "$DEVNOS_RIGHT" ] ; then
+	echo "Detach disk on second half ..."
+	for devno in ${DEVNOS_RIGHT} ; do
+	    vmcp det ${devno##*.}
+	    break;
+	done
+    else
+	for wwid in ${SCSIID_RIGHT} ; do
+	    paths=$(multipathd -k"show map $wwid topology" | \
+	        sed -n 's/.*[0-9]*:[0-9]*:[0-9]*:[0-9]* \(sd[a-z]*\) .*/\1/p')
+	    for path in ${paths} ; do
+		echo 1 > /sys/block/$path/device/delete || \
+		    error_exit "Cannot remove device ${path} from ${wwid}"
+	    done
+	    break;
+	done
+    fi
 
     wait_for_md_failed $MONITOR_TIMEOUT
 
@@ -97,15 +128,21 @@ if [ "$detach_other_half" ] ; then
     mdadm --detail /dev/${MD_NUM}
     ls /mnt
     echo "Re-attach disk on second half ..."
-    for devno in $DEVNOS_RIGHT ; do
-	if [ "$userid" = "LINUX025" ] ; then
-	    vmcp link \* ${devno##*.} ${devno##*.}
-	else
-	    vmcp att ${devno##*.} \*
-	fi
-	break;
-    done
-
+    if [ -n "$DEVNOS_RIGHT" ] ; then
+	for devno in $DEVNOS_RIGHT ; do
+	    if [ "$userid" = "LINUX025" ] ; then
+		vmcp link \* ${devno##*.} ${devno##*.}
+	    else
+		vmcp att ${devno##*.} \*
+	    fi
+	    break;
+	done
+    else
+	for shost in ${SHOSTS_RIGHT[@]} ; do
+	    echo '- - -' > /sys/class/scsi_host/$shost/scan || \
+		error_error "Failed to rescan host $shost"
+	done
+    fi
     wait_for_md_running_right $MONITOR_TIMEOUT
     
     wait_for_sync ${MD_NUM} || \
