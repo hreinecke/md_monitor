@@ -11,6 +11,13 @@ MD_NUM="md1"
 MD_NAME="testcase8"
 SLEEPTIME=30
 
+function resume_mpath() {
+    local mpath=$1
+
+    dmsetup resume $mpath || \
+	error_exit "Cannot resume $mpath"
+}
+
 stop_md $MD_NUM
 
 activate_devices
@@ -44,10 +51,24 @@ mdadm --detail /dev/${MD_NUM} | grep Devices > ${MD_LOG1}
 echo "Run I/O test"
 run_iotest /mnt
 
-echo "Invoke flashcopy"
-DEVNO_DST=$(readlink /sys/block/${DASDS_LEFT[1]}/device)
-DEVNO_SRC=$(readlink /sys/block/${DASDS_LEFT[0]}/device)
-vmcp flashcopy ${DEVNO_DST##*.} 16 32 ${DEVNO_SRC##*.} 0 16
+if [ -n "$DEVNOS_LEFT" ] ; then
+    echo "Invoke flashcopy"
+    DEVNO_SRC=$(readlink /sys/block/${DASDS_LEFT[1]}/device)
+    DEVNO_DST=$(readlink /sys/block/${DASDS_LEFT[0]}/device)
+    vmcp flashcopy ${DEVNO_SRC##*.} 16 32 ${DEVNO_DST##*.} 0 16
+else
+    echo "Invoke sg_dd"
+    for mpath in ${DEVICES_LEFT[@]} ; do
+	dmsetup suspend $mpath || \
+	    error_exit "Cannot suspend device $mpath"
+	push_recovery_fn "resume_mpath $mpath"
+	break;
+    done
+    SDEV_SRC=${SDEVS_LEFT[2]}
+    SDEV_DST=${SDEVS_LEFT[0]}
+    sg_dd iflag=sgio,dsync,direct if=/dev/$SDEV_SRC oflag=sgio,dsync,direct of=/dev/$SDEV_DST bs=4096 count=16 skip=16
+    pop_recovery_fn
+fi
 
 wait_for_md_failed $SLEEPTIME
 
@@ -73,13 +94,15 @@ for d in ${DEVICES_LEFT[0]} ; do
     md_status=$(md_monitor -c "MonitorStatus:/dev/${MD_NUM}")
     echo "Monitor status: $md_status"
     wait_md ${MD_NUM}
-    sleep 1
-    if ! dasdfmt -p -y -b 4096 -f ${d%1} ; then
-	error_exit "Cannot format device ${d%1}"
-    fi
-    sleep 2
-    if ! fdasd -a ${d%1} ; then
-	error_exit "Cannot partition device ${d%1}"
+    if [ "$DEVNOS_LEFT" ] ; then
+	sleep 1
+	if ! dasdfmt -p -y -b 4096 -f ${d%1} ; then
+	    error_exit "Cannot format device ${d%1}"
+	fi
+	sleep 2
+	if ! fdasd -a ${d%1} ; then
+	    error_exit "Cannot partition device ${d%1}"
+	fi
     fi
     sleep 2
     if ! mdadm --manage /dev/${MD_NUM} --add --failfast $d ; then
