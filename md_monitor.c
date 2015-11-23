@@ -505,6 +505,10 @@ static void attach_device(struct udev_device *udev_dev)
 		raid_dev = udev_dev;
 		raid_devt = udev_devt;
 		uuid = udev_device_get_sysattr_value(udev_dev, "dm/uuid");
+		if (!uuid) {
+			warn("%s: no device-mapper uuid, ignore", devname);
+			return;
+		}
 		if (strncmp(uuid, "mpath-", 6)) {
 			info("%s: unhandled DM uuid '%s', ignore",
 			     devname, uuid);
@@ -1655,9 +1659,14 @@ static void discover_md_components(struct md_monitor *md)
 		found->md_index = i;
 		found->md_slot = info.raid_disk;
 		sysname = udev_device_get_sysname(raid_dev);
-		if (!strncmp(sysname, "dm-", 3))
+		if (!strncmp(sysname, "dm-", 3)) {
 			sysname = udev_device_get_sysattr_value(raid_dev,
 								"dm/name");
+			if (!sysname) {
+				warn("%s: no device-mapper name", sysname);
+				continue;
+			}
+		}
 		if (!list_empty(&found->siblings)) {
 			warn("%s: Already monitoring %s",
 			     mdname, found->md_name);
