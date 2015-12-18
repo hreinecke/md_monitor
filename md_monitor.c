@@ -326,12 +326,12 @@ static struct device_monitor * lookup_md_component(struct md_monitor *md_dev,
 			}
 		}
 		if (!strncmp(devname, tmp->md_name,
-			     strlen(tmp->md_name))) {
+			     strlen(devname))) {
 			found = tmp;
 			break;
 		}
 		if (!strncmp(devname, tmp->dev_name,
-			     strlen(tmp->dev_name))) {
+			     strlen(devname))) {
 			found = tmp;
 			break;
 		}
