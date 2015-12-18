@@ -645,7 +645,7 @@ function wait_for_monitor() {
 	fi
 	sleep 1
 	if [ -n "$tmpstatus" ] && [ $tmpstatus != $newstatus ] ; then
-	    endtime=$(date +%s --date="+ $timeout sec")
+	    break;
 	fi
 	tmpstatus=$newstatus
 	runtime=$(date +%s)
