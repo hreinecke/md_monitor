@@ -22,8 +22,6 @@ start_md $MD_NUM 6
 
 logger "${MD_NAME}: expand RAID"
 
-echo "WARNING: testcase will fail due to bug#953595"
-
 echo "Create filesystem ..."
 if ! mkfs.ext3 /dev/${MD_NUM} ; then
     error_exit "Cannot create fs"
