@@ -32,7 +32,7 @@ if ! mount /dev/${MD_NUM} /mnt ; then
 fi
 
 MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
-mdadm --detail /dev/${MD_NUM} | grep Devices > ${MD_LOG1}
+mdadm --detail /dev/${MD_NUM} | sed -n '/Devices/p' > ${MD_LOG1}
 
 echo "Write test file 1 ..."
 dd if=/dev/zero of=/mnt/testfile1 bs=4096 count=1024
@@ -96,7 +96,7 @@ if ! diff ${MD_LOG2} ${MD_LOG3} ; then
 fi
 
 MD_LOG4="/tmp/monitor_${MD_NAME}_step4.log"
-mdadm --detail /dev/${MD_NUM} | grep Devices > ${MD_LOG4}
+mdadm --detail /dev/${MD_NUM} | sed -n '/Devices/p' > ${MD_LOG4}
 if ! diff -u "${MD_LOG1}" "${MD_LOG4}" ; then
     error_exit "Not all devices on ${MD_NUM} are working"
 fi

@@ -46,7 +46,7 @@ fi
 logger "${MD_NAME}: Accidental DASD overwrite"
 
 MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
-mdadm --detail /dev/${MD_NUM} | grep Devices > ${MD_LOG1}
+mdadm --detail /dev/${MD_NUM} | sed -n '/Devices/p' > ${MD_LOG1}
 
 echo "Run I/O test"
 run_iotest /mnt
@@ -132,7 +132,7 @@ if ! wait_for_sync ${MD_NUM} ; then
 fi
 
 MD_LOG2="/tmp/monitor_${MD_NAME}_step2.log"
-mdadm --detail /dev/${MD_NUM} | grep Devices > ${MD_LOG2}
+mdadm --detail /dev/${MD_NUM} | sed -n '/Devices/p' > ${MD_LOG2}
 if ! diff -u "${MD_LOG1}" "${MD_LOG2}" ; then
     error_exit "Not all devices on ${MD_NUM} are working"
 fi
