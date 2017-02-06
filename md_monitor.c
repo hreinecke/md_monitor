@@ -1783,7 +1783,7 @@ static int reset_md(struct md_monitor *md_dev)
 {
 	const char *md_name = udev_device_get_sysname(md_dev->device);
 	char cmdline[256];
-	int rc;
+	int rc, ret = 0;
 	struct device_monitor *dev;
 
 	pthread_mutex_lock(&md_dev->status_lock);
@@ -1810,6 +1810,10 @@ static int reset_md(struct md_monitor *md_dev)
 	if (rc) {
 		warn("%s: cannot reset mirror, error %d",
 		     md_name, rc);
+		if (rc == 512)
+			ret = -EBUSY;
+		else
+			ret = -EIO;
 	} else {
 		pthread_mutex_lock(&md_dev->status_lock);
 		md_dev->degraded = 0;
@@ -1817,7 +1821,7 @@ static int reset_md(struct md_monitor *md_dev)
 		md_dev->pending_status = UNKNOWN;
 		pthread_mutex_unlock(&md_dev->status_lock);
 	}
-	return rc == 512 ? -EBUSY : -EIO;
+	return ret;
 }
 
 static void remove_md(struct md_monitor *md_dev)
