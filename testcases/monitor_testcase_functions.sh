@@ -152,7 +152,7 @@ function stop_md() {
     if ! grep -q ${cur_md} /proc/mdstat 2> /dev/null ; then
 	return
     fi
-    mdadm /dev/${cur_md} --wait-clean
+    mdadm --misc /dev/${cur_md} --wait-clean
     check_md_log stop
     trap - EXIT
     stop_monitor
