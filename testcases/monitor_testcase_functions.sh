@@ -74,6 +74,11 @@ function start_md() {
     mdadm --brief --detail ${MD_DEVNAME} >> /etc/mdadm.conf
     echo "PROGRAM ${MD_SCRIPT}" >> /etc/mdadm.conf
 
+    if ! which journalctl ; then
+	rm /var/log/messages
+	rcsyslog restart
+    fi
+
     MONITOR_PID=$(/sbin/md_monitor -y -p 7 -d -s)
     trapcmd="[ \$? -ne 0 ] && echo TEST FAILED while executing \'\$BASH_COMMAND\', EXITING"
     trapcmd="$trapcmd ; logger ${MD_NAME}: failed"
@@ -183,7 +188,11 @@ function stop_md() {
 function write_log() {
     local MD_NAME=$1
 
-    journalctl --since "$STARTDATE" > /tmp/monitor_${MD_NAME}.log
+    if which journalctl ; then
+	journalctl --since "$STARTDATE" > /tmp/monitor_${MD_NAME}.log
+    else
+	cp /var/log/messages /tmp/monitor_${MD_NAME}.log
+    fi
 }
 
 function wait_md() {
