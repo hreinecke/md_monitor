@@ -2170,7 +2170,6 @@ static void *mdadm_exec_thread (void *ctx)
 	struct mdadm_exec *thr = ctx;
 	struct timespec tmo;
 	struct timeval start_time, end_time, diff;
-	int rc;
 	struct list_head active_list;
 	struct md_monitor *md_dev, *tmp;
 
@@ -2178,6 +2177,8 @@ static void *mdadm_exec_thread (void *ctx)
 		INIT_LIST_HEAD(&active_list);
 		pthread_mutex_lock(&pending_lock);
 		if (list_empty(&pending_list)) {
+			int rc;
+
 			info("md_exec: no requests, waiting %ld seconds",
 			     failfast_timeout);
 			if (gettimeofday(&start_time, NULL)) {
@@ -2207,7 +2208,7 @@ static void *mdadm_exec_thread (void *ctx)
 		if (list_empty(&active_list))
 			continue;
 		list_for_each_entry_safe(md_dev, tmp, &active_list, pending) {
-			int do_fail = 0, rc;
+			int do_fail = 0, rc = 0;
 
 			if (gettimeofday(&start_time, NULL) < 0)
 				start_time.tv_sec = 0;
