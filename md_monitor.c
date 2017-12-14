@@ -2463,6 +2463,10 @@ void *cli_monitor_thread(void *ctx)
 		if (!strcmp(event, "MirrorStatus")) {
 			info("%s: display mirror status for %d devices, len %d",
 			     mdstr, md_dev->raid_disks, buflen);
+			memset(buf, 0x00, CLI_BUFLEN);
+			event = NULL;
+			mdstr = NULL;
+			devstr = NULL;
 			buflen = display_md_status(md_dev, buf, CLI_BUFLEN);
 			if (buflen < 0) {
 				iov.iov_len = 1;
@@ -2475,6 +2479,10 @@ void *cli_monitor_thread(void *ctx)
 		if (!strcmp(event, "MonitorStatus")) {
 			info("%s: display monitor status for %d devices, len %d",
 			     mdstr, md_dev->raid_disks, buflen);
+			memset(buf, 0x00, sizeof(buf));
+			event = NULL;
+			mdstr = NULL;
+			devstr = NULL;
 			buflen = display_io_status(md_dev, buf, CLI_BUFLEN);
 			if (buflen < 0) {
 				iov.iov_len = 1;
