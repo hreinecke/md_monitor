@@ -154,7 +154,7 @@ function stop_md() {
     local md_detail
     local cur_md=$1
 
-    if ! grep -q ${cur_md} /proc/mdstat 2> /dev/null ; then
+    if ! grep -q ${cur_md}^ /proc/mdstat 2> /dev/null ; then
 	return
     fi
     mdadm --misc /dev/${cur_md} --wait-clean
