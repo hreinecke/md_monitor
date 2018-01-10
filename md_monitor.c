@@ -2063,6 +2063,11 @@ static int check_md(struct md_monitor *md_dev, mdu_array_info_t *info)
 		} else if (info->raid_disks == 0) {
 			warn("%s: no RAID disks, ignoring", md_dev->dev_name);
 			rc = EAGAIN;
+		} else if (info->size == 0) {
+			warn("%s: array inactive, ignoring",
+			     md_dev->dev_name);
+			info->raid_disks = 0;
+			rc = EAGAIN;
 		}
 		close(ioctl_fd);
 	} else {
