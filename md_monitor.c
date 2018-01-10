@@ -60,7 +60,7 @@
 #include "dasd_util.h"
 #include "dasd_ioctl.h"
 
-const char version_str[] = "md_monitor version 6.3";
+const char version_str[] = "md_monitor version 6.4";
 
 LIST_HEAD(md_list);
 LIST_HEAD(device_list);
