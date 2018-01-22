@@ -8,8 +8,9 @@ set -o errexit
 
 . $(dirname "$0")/monitor_testcase_functions.sh
 
-MD_NUM="md1"
 MD_NAME="testcase4"
+MD_DEV="/dev/md/${MD_NAME}"
+
 MONITOR_TIMEOUT=60
 
 function attach_dasd() {
@@ -38,7 +39,7 @@ function attach_scsi() {
     fi
 }
 
-stop_md $MD_NUM
+stop_md ${MD_DEV}
 
 activate_devices
 
@@ -52,17 +53,17 @@ if [ -n "$DEVNOS_LEFT" ] ; then
 fi
 
 ulimit -c unlimited
-start_md ${MD_NUM}
+start_md ${MD_NAME}
 
 logger "${MD_NAME}: Disk detach/attach"
 
 echo "$(date) Create filesystem ..."
-if ! mkfs.ext3 /dev/${MD_NUM} ; then
+if ! mkfs.ext3 ${MD_DEV} ; then
     error_exit "Cannot create fs"
 fi
 
 echo "$(date) Mount filesystem ..."
-if ! mount /dev/${MD_NUM} /mnt ; then
+if ! mount ${MD_DEV} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
 
@@ -95,7 +96,7 @@ wait_for_md_failed $MONITOR_TIMEOUT
 
 echo "$(date) Wait for 10 seconds"
 sleep 10
-mdadm --detail /dev/${MD_NUM}
+mdadm --detail ${MD_DEV}
 
 echo "$(date) Re-attach disk on first half ..."
 while true ; do
@@ -107,13 +108,13 @@ done
 wait_for_md_running_left $MONITOR_TIMEOUT
 
 echo "$(date) MD status"
-mdadm --detail /dev/${MD_NUM}
+mdadm --detail ${MD_DEV}
 
 echo "$(date) Stop I/O test"
 stop_iotest
 
 echo "$(date) Wait for sync"
-wait_for_sync ${MD_NUM} || \
+wait_for_sync ${MD_DEV} || \
     error_exit "Failed to synchronize array"
 
 check_md_log step1
@@ -143,7 +144,7 @@ if [ "$detach_other_half" ] ; then
     wait_for_md_failed $MONITOR_TIMEOUT
 
     sleep 5
-    mdadm --detail /dev/${MD_NUM}
+    mdadm --detail ${MD_DEV}
     ls /mnt
     echo "Re-attach disk on second half ..."
     while true ; do
@@ -154,7 +155,7 @@ if [ "$detach_other_half" ] ; then
 
     wait_for_md_running_right $MONITOR_TIMEOUT
     
-    wait_for_sync ${MD_NUM} || \
+    wait_for_sync ${MD_DEV} || \
 	error_exit "Failed to synchronize array"
 
     check_md_log step2
@@ -165,4 +166,4 @@ logger "${MD_NAME}: success"
 echo "$(date) Umount filesystem ..."
 umount /mnt
 
-stop_md ${MD_NUM}
+stop_md ${MD_DEV}

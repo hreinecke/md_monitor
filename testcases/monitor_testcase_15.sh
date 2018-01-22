@@ -28,10 +28,13 @@ run_wget() {
 }
 
 MD_DEV=$(mount | grep ' / ' | cut -d ' ' -f 1)
-MD_NUM=${MD_DEV##*/}
-if [ "${MD_NUM##md}" = "${MD_NUM}" ] ; then
+MD_NAME=${MD_DEV#/dev/}
+if [ "${MD_NAME##md}" = "${MD_NAME}" ] ; then
     echo "Testcase can only be run with root on MD"
     exit 0
+fi
+if [ "${MD_NAME##md/}" != "${MD_NAME}" ] ; then
+    MD_NAME=${MD_NAME##md/}
 fi
 
 for dasd in $(mdadm --detail ${MD_DEV} | sed -n 's/.*set-A failfast *\/dev\/\(.*\)/\1/p') ; do
@@ -85,7 +88,7 @@ fi
 wait_for_md_failed $MONITOR_TIMEOUT
 
 echo "$(date) MD status"
-mdadm --detail /dev/${MD_NUM}
+mdadm --detail ${MD_DEV}
 
 echo "$(date) Wait for $IO_TIMEOUT seconds"
 sleep $IO_TIMEOUT
@@ -126,12 +129,12 @@ logger "All DASDs released"
 wait_for_md_running_left $MONITOR_TIMEOUT
 
 echo "$(date) MD status"
-mdadm --detail /dev/${MD_NUM}
+mdadm --detail ${MD_DEV}
 
 echo "$(date) Wait for sync ..."
-wait_for_sync ${MD_NUM} || \
+wait_for_sync ${MD_DEV} || \
     error_exit "Failed to synchronize array"
 
-mdadm --detail /dev/${MD_NUM}
+mdadm --detail ${MD_DEV}
 
 true

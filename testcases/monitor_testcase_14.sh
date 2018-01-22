@@ -7,8 +7,9 @@ set -o errexit
 
 . $(dirname "$0")/monitor_testcase_functions.sh
 
-MD_NUM="md1"
 MD_NAME="testcase14"
+MD_DEV="/dev/md/${MD_NAME}"
+
 MONITOR_TIMEOUT=60
 
 function resume_dasd() {
@@ -28,22 +29,22 @@ function online_scsi() {
 
 logger "Monitor Testcase 14: Disk quiesce/resume"
 
-stop_md $MD_NUM
+stop_md ${MD_DEV}
 
 activate_devices
 
 clear_metadata
 
 ulimit -c unlimited
-start_md ${MD_NUM}
+start_md ${MD_NAME}
 
 echo "$(date) Create filesystem ..."
-if ! mkfs.ext3 /dev/${MD_NUM} ; then
+if ! mkfs.ext3 ${MD_DEV} ; then
     error_exit "Cannot create fs"
 fi
 
 echo "$(date) Mount filesystem ..."
-if ! mount /dev/${MD_NUM} /mnt ; then
+if ! mount ${MD_DEV} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
 
@@ -67,7 +68,7 @@ fi
 
 wait_for_md_failed $MONITOR_TIMEOUT
 
-md_monitor -c "MonitorStatus:/dev/${MD_NUM}"
+md_monitor -c "MonitorStatus:${MD_DEV}"
 
 echo "$(date) Write test file 2 ..."
 dd if=/dev/zero of=/mnt/testfile2 bs=4096 count=1024
@@ -99,7 +100,7 @@ fi
 echo "$(date) Wait for 10 seconds"
 sleep 10
 
-md_monitor -c "MonitorStatus:/dev/${MD_NUM}"
+md_monitor -c "MonitorStatus:${MD_DEV}"
 
 echo "$(date) Resume disks on second half ..."
 
@@ -117,7 +118,7 @@ else
     done
 fi
 
-md_monitor -c "MonitorStatus:/dev/${MD_NUM}"
+md_monitor -c "MonitorStatus:${MD_DEV}"
 
 echo "Write test file 4 ..."
 dd if=/dev/zero of=/mnt/testfile4 bs=4096 count=1024
@@ -140,10 +141,10 @@ fi
 wait_for_md_running_left $MONITOR_TIMEOUT
 
 echo "$(date) MD status"
-mdadm --detail /dev/${MD_NUM}
+mdadm --detail ${MD_DEV}
 
 echo "$(date) Wait for sync"
-wait_for_sync ${MD_NUM} || \
+wait_for_sync ${MD_DEV} || \
     error_exit "Failed to synchronize array"
 
 check_md_log step1
@@ -151,4 +152,4 @@ check_md_log step1
 echo "$(date) Umount filesystem ..."
 umount /mnt
 
-stop_md ${MD_NUM}
+stop_md ${MD_DEV}

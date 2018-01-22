@@ -7,27 +7,27 @@ set -o errexit
 
 . $(dirname "$0")/monitor_testcase_functions.sh
 
-MD_NUM="md1"
 MD_NAME="root_on_md"
+MD_DEV="/dev/md/${MD_NAME}"
 
-stop_md $MD_NUM
+stop_md ${MD_DEV}
 
 activate_dasds
 
 clear_metadata
 
 ulimit -c unlimited
-start_md ${MD_NUM}
+start_md ${MD_NAME}
 
 logger "${MD_NAME}: setting up root on MD"
 
 echo "Create filesystem ..."
-if ! mkfs.ext3 /dev/${MD_NUM} ; then
+if ! mkfs.ext3 ${MD_DEV} ; then
     error_exit "Cannot create fs"
 fi
 sleep 1
 echo "Mount filesystem ..."
-if ! mount /dev/${MD_NUM} /mnt ; then
+if ! mount ${MD_DEV} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
 
@@ -116,4 +116,4 @@ umount /mnt/boot
 umount /mnt/var/log
 umount /mnt
 
-stop_md ${MD_NUM}
+stop_md ${MD_DEV}

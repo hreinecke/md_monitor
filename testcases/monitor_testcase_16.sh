@@ -21,10 +21,13 @@ function resume_dasd() {
 }
 
 MD_DEV=$(mount | grep ' / ' | cut -d ' ' -f 1)
-MD_NUM=${MD_DEV##*/}
-if [ "${MD_NUM##md}" = "${MD_NUM}" ] ; then
+MD_NAME=${MD_DEV#/dev/}
+if [ "${MD_NAME##md}" = "${MD_NAME}" ] ; then
     echo "Testcase can only be run with root on MD"
     exit 0
+fi
+if [ "${MD_NAME##md/}" != "${MD_NAME}" ] ; then
+    MD_NAME=${MD_NAME##md/}
 fi
 
 for dasd in $(mdadm --detail ${MD_DEV} | sed -n 's/.*set-A failfast *\/dev\/\(.*\)/\1/p') ; do

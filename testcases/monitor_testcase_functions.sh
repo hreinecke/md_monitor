@@ -26,7 +26,7 @@ function error_exit() {
 }
 
 function start_md() {
-    local MD_NUM=$1
+    local MD_NAME=$1
     local MD_DEVICES=$2
     local MD_MONITOR=/sbin/md_monitor
     local MD_SCRIPT=/usr/share/misc/md_notify_device.sh
@@ -34,15 +34,12 @@ function start_md() {
     local n=0
     local devlist
 
-    case "$MD_NUM" in
+    case "$MD_NAME" in
 	md*)
-	    MD_DEVNAME=/dev/$MD_NUM
+	    MD_DEV=/dev/$MD_NAME
 	    ;;
 	*)
-	    MD_NAME=$1
-	    MD_NUM=$2
-	    MD_DEVICES=$3
-	    MD_DEVNAME=/dev/md/$MD_NAME
+	    MD_DEV=/dev/md/$MD_NAME
 	    ;;
     esac
     if [ -z "$MD_DEVICES" ] ; then
@@ -60,18 +57,18 @@ function start_md() {
 	systemctl stop mdmonitor
     fi
     echo "Create MD array ..."
-    mdadm --create ${MD_DEVNAME} --name=${MD_NAME} \
+    mdadm --create ${MD_DEV} --name=${MD_NAME} \
 	--raid-devices=${MD_DEVICES} ${MD_ARGS} --level=raid10 \
 	--failfast ${devlist} \
 	|| error_exit "Cannot create MD array."
 
-    mdadm --wait ${MD_DEVNAME} || true
+    mdadm --wait ${MD_DEV} || true
 
     START_LOG="/tmp/monitor_${MD_NAME}_mdstat_start.log"
-    mdadm --detail ${MD_DEVNAME} | sed -n '/Devices/p' | tee ${START_LOG}
+    mdadm --detail ${MD_DEV} | sed -n '/Devices/p' | tee ${START_LOG}
     echo "POLICY action=re-add" > /etc/mdadm.conf
     echo "AUTO -all" >> /etc/mdadm.conf
-    mdadm --brief --detail ${MD_DEVNAME} >> /etc/mdadm.conf
+    mdadm --brief --detail ${MD_DEV} >> /etc/mdadm.conf
     echo "PROGRAM ${MD_SCRIPT}" >> /etc/mdadm.conf
 
     if ! which journalctl > /dev/null 2>&1 ; then
@@ -111,9 +108,9 @@ function check_md_log() {
 
     [ -z "${START_LOG}" ] && return
     logfile="/tmp/monitor_${MD_NAME}_${prefix}.log"
-    mdadm --detail /dev/${MD_NUM} | sed -n '/Devices/p' | tee ${logfile}
+    mdadm --detail ${MD_DEV} | sed -n '/Devices/p' | tee ${logfile}
     if ! diff -u "${START_LOG}" "${logfile}" ; then
-	error_exit "current ${MD_NUM} state differs after test but should be identical to initial state"
+	error_exit "current ${MD_NAME} state differs after test but should be identical to initial state"
     fi
     rm -f $logfile
 }
@@ -150,14 +147,17 @@ function stop_iostat() {
 }
 
 function stop_md() {
+    local md_dev=$1
     local md
     local md_detail
-    local cur_md=$1
+    local cur_md
 
-    if ! grep -q ${cur_md}^ /proc/mdstat 2> /dev/null ; then
+    cur_md=$(resolve_md $md_dev)
+
+    if ! grep -q "${cur_md} " /proc/mdstat 2> /dev/null ; then
 	return
     fi
-    mdadm --misc /dev/${cur_md} --wait-clean
+    mdadm --misc ${md_dev} --wait-clean
     check_md_log stop
     trap - EXIT
     stop_monitor
@@ -195,10 +195,23 @@ function write_log() {
     fi
 }
 
-function wait_md() {
-    local MD_NUM=$1
+function resolve_md() {
+    local MD_NAME=$1
 
-    mdadm --wait /dev/${MD_NUM} || true
+    if [ -L "$MD_NAME" ] ; then
+	md_link=$(readlink $MD_NAME)
+	MD_NUM=${md_link##*/}
+    else
+	MD_NUM=${MD_NAME##*/}
+    fi
+    echo "$MD_NUM"
+    exit 0
+}
+
+function wait_md() {
+    local MD_DEV=$1
+
+    mdadm --wait ${MD_DEV} || true
 }
 
 function setup_one_dasd() {
@@ -534,7 +547,8 @@ function wait_for_sync () {
   local ELAPSED_TIME;
   local status;
   local resync_time;
-  local MD=$1
+  local MD_DEV=$1
+  local MD
   local wait_for_bitmap=$2
   local RAIDLVL
   local raid_status
@@ -543,10 +557,7 @@ function wait_for_sync () {
   local MONITORTIMEOUT=30
   local RESYNCSPEED=4000
 
-  if [ ! -L /sys/block/$MD ] ; then
-      md_link=$(readlink /dev/$MD)
-      MD=${md_link##*/}
-  fi
+  MD=$(resolve_md ${MD_DEV})
       
   local RAIDLVL=$(sed -n "s/${MD}.*\(raid[0-9]*\) .*/\1/p" /proc/mdstat)
   if [ -z "$RAIDLVL" ] ; then
@@ -562,7 +573,7 @@ function wait_for_sync () {
   fi
   if [ $raid_disks -eq 0 ] ; then
       echo "ERROR: No raid disks on mirror ${MD}"
-      mdadm --detail /dev/${MD}
+      mdadm --detail ${MD_DEV}
       return 1
   fi
 
@@ -604,10 +615,10 @@ function wait_for_sync () {
   done
   if [ $wait_time -ge $MONITORTIMEOUT ] ; then
       echo "ERROR: recovery didn't start after $MONITORTIMEOUT seconds"
-      mdadm --detail /dev/$MD
+      mdadm --detail ${MD_DEV}
       return 1
   fi
-  wait_md ${MD}
+  wait_md ${MD_DEV}
 
   if [ "$action" != "reshape" ] ; then
       # Reset sync speed
@@ -622,7 +633,7 @@ function wait_for_sync () {
   working_disks=${raid_status#*/}
   if [ $raid_disks -ne $working_disks ] ; then
       echo "ERROR: mirror $MD degraded after recovery"
-      mdadm --detail /dev/$MD
+      mdadm --detail ${MD_DEV}
       return 1;
   fi
   if [ "$wait_for_bitmap" ] ; then
@@ -646,7 +657,7 @@ function wait_for_sync () {
 }
 
 function wait_for_monitor() {
-    local MD_NUM=$1
+    local MD_DEV=$1
     local oldstatus=$2
     local timeout=$3
     local newstatus tmpstatus
@@ -656,7 +667,7 @@ function wait_for_monitor() {
     runtime=$starttime
     endtime=$(date +%s --date="+ $timeout sec")
     while [ $runtime -lt $endtime ] ; do
-	newstatus=$(md_monitor -c"MonitorStatus:/dev/${MD_NUM}")
+	newstatus=$(md_monitor -c"MonitorStatus:${MD_DEV}")
 	if [ "$oldstatus" = "$newstatus" ] ; then
 	    break;
 	fi
@@ -707,6 +718,9 @@ function wait_for_md_failed() {
 
 function wait_for_md_running_left() {
     local timeout=$1
+    local MD_NUM
+
+    MD_NUM=$(resolve_md ${MD_DEV})
 
     echo "$(date) Ok. Waiting for MD to pick up changes ..."
     # Wait for md_monitor to pick up changes
@@ -738,6 +752,9 @@ function wait_for_md_running_left() {
 
 function wait_for_md_running_right() {
     local timeout=$1
+    local MD_NUM
+
+    MD_NUM=$(resolve_md ${MD_DEV})
 
     echo "$(date) Ok. Waiting for MD to pick up changes ..."
     # Wait for md_monitor to pick up changes

@@ -7,13 +7,14 @@ set -o errexit
 
 . $(dirname "$0")/monitor_testcase_functions.sh
 
-MD_NUM="md1"
 MD_NAME="testcase13"
+MD_DEV="/dev/md/${MD_NAME}"
+
 MONITOR_TIMEOUT=60
 
 logger "Monitor Testcase 13: Pick up failed array"
 
-stop_md $MD_NUM
+stop_md ${MD_DEV}
 
 activate_devices
 
@@ -25,15 +26,15 @@ if [ -z "$userid" ] ; then
 fi
 
 ulimit -c unlimited
-start_md ${MD_NUM}
+start_md ${MD_NAME}
 
 echo "$(date) Create filesystem ..."
-if ! mkfs.ext3 /dev/${MD_NUM} ; then
+if ! mkfs.ext3 ${MD_DEV} ; then
     error_exit "Cannot create fs"
 fi
 
 echo "$(date) Mount filesystem ..."
-if ! mount /dev/${MD_NUM} /mnt ; then
+if ! mount ${MD_DEV} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
 
@@ -67,7 +68,7 @@ fi
 
 echo "$(date) Wait for 10 seconds"
 sleep 10
-mdadm --detail /dev/${MD_NUM}
+mdadm --detail ${MD_DEV}
 
 echo "$(date) Re-attach disk on first half ..."
 if [ -n "$DEVNOS_LEFT" ] ; then
@@ -92,16 +93,16 @@ MONITOR_PID=$(/sbin/md_monitor -y -p 7 -d -s)
 wait_for_md_running_left $MONITOR_TIMEOUT
 
 echo "$(date) MD status"
-mdadm --detail /dev/${MD_NUM}
+mdadm --detail ${MD_DEV}
 
 echo "$(date) Stop I/O test"
 stop_iotest
 
 echo "$(date) Wait for sync"
-wait_for_sync ${MD_NUM} || \
+wait_for_sync ${MD_DEV} || \
     error_exit "Failed to synchronize array"
 
-mdadm --detail /dev/${MD_NUM}
+mdadm --detail ${MD_DEV}
 
 if [ "$detach_other_half" ] ; then
     if [ -n "$DEVNOS_RIGHT" ] ; then
@@ -125,7 +126,7 @@ if [ "$detach_other_half" ] ; then
     wait_for_md_failed $MONITOR_TIMEOUT
 
     sleep 5
-    mdadm --detail /dev/${MD_NUM}
+    mdadm --detail ${MD_DEV}
     ls /mnt
     echo "Re-attach disk on second half ..."
     if [ -n "$DEVNOS_RIGHT" ] ; then
@@ -145,9 +146,9 @@ if [ "$detach_other_half" ] ; then
     fi
     wait_for_md_running_right $MONITOR_TIMEOUT
     
-    wait_for_sync ${MD_NUM} || \
+    wait_for_sync ${MD_DEV} || \
 	error_exit "Failed to synchronize array"
-    mdadm --detail /dev/${MD_NUM}
+    mdadm --detail ${MD_DEV}
 fi
 
 trap - EXIT
@@ -155,4 +156,4 @@ trap - EXIT
 echo "$(date) Umount filesystem ..."
 umount /mnt
 
-stop_md ${MD_NUM}
+stop_md ${MD_DEV}

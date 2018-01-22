@@ -7,8 +7,9 @@ set -o errexit
 
 . $(dirname "$0")/monitor_testcase_functions.sh
 
-MD_NUM="md1"
 MD_NAME="testcase12"
+MD_DEV="/dev/md/${MD_NAME}"
+
 MONITOR_TIMEOUT=60
 SLEEPTIME=30
 
@@ -32,7 +33,7 @@ function rescan_shost() {
 	error_exit "Failed to rescan host ${shost}"
 }
 
-stop_md $MD_NUM
+stop_md ${MD_DEV}
 
 activate_devices
 
@@ -44,17 +45,17 @@ if [ -z "$userid" ] ; then
 fi
 
 ulimit -c unlimited
-start_md ${MD_NUM}
+start_md ${MD_NAME}
 
 logger "${MD_NAME}: Successive Disk detach/attach"
 
 echo "$(date) Create filesystem ..."
-if ! mkfs.ext3 /dev/${MD_NUM} ; then
+if ! mkfs.ext3 ${MD_DEV} ; then
     error_exit "Cannot create fs"
 fi
 
 echo "$(date) Mount filesystem ..."
-if ! mount /dev/${MD_NUM} /mnt ; then
+if ! mount ${MD_DEV} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
 
@@ -62,7 +63,7 @@ echo "$(date) Run I/O test"
 run_iotest /mnt;
 
 MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
-md_monitor -c"ArrayStatus:/dev/${MD_NUM}" | sed -n 's/\(.*\) slot [0-9]*\/[0-9]* \(.*\)/\1 \2/p' | tee ${MD_LOG1}
+md_monitor -c"ArrayStatus:${MD_DEV}" | sed -n 's/\(.*\) slot [0-9]*\/[0-9]* \(.*\)/\1 \2/p' | tee ${MD_LOG1}
 
 if [ -n "$DEVNOS_LEFT" ] ; then
     for devno in ${DEVNOS_LEFT} ; do
@@ -78,12 +79,12 @@ if [ -n "$DEVNOS_LEFT" ] ; then
 
 	echo "$(date) Waiting for 15 seconds ..."
 	sleep 15
-	md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
+	md_monitor -c"ArrayStatus:${MD_DEV}"
 	echo "$(date) Attach left device $devno ..."
 	pop_recovery_fn || \
 	    error_exit "Cannot attach DASD ${dasd}"
 
-	md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
+	md_monitor -c"ArrayStatus:${MD_DEV}"
     done
 else
     for wwid in ${SCSIID_LEFT} ; do
@@ -105,7 +106,7 @@ else
 
 	echo "$(date) Waiting for 15 seconds ..."
 	sleep 15
-	md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
+	md_monitor -c"ArrayStatus:${MD_DEV}"
 	echo "$(date) Attach left device $wwid ..."
 	while [ $recovery_fn -gt 0 ] ; do
 	    pop_recovery_fn || \
@@ -113,19 +114,19 @@ else
 	    (( recovery_fn-- )) || true
 	done
 
-	md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
+	md_monitor -c"ArrayStatus:${MD_DEV}"
     done
 fi
 echo "$(date) Wait for sync"
-if ! wait_for_sync ${MD_NUM} ; then
-    md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
+if ! wait_for_sync ${MD_DEV} ; then
+    md_monitor -c"ArrayStatus:${MD_DEV}"
     stop_iotest
     error_exit "Failed to synchronize array"
 fi
 echo "$(date) mirror synchronized"
 check_md_log
 MD_LOG2="/tmp/monitor_${MD_NAME}_step2.log"
-md_monitor -c"ArrayStatus:/dev/${MD_NUM}" | sed -n 's/\(.*\) slot [0-9]*\/[0-9]* \(.*\)/\1 \2/p' | tee ${MD_LOG2}
+md_monitor -c"ArrayStatus:${MD_DEV}" | sed -n 's/\(.*\) slot [0-9]*\/[0-9]* \(.*\)/\1 \2/p' | tee ${MD_LOG2}
 if ! diff -pu ${MD_LOG1} ${MD_LOG2} ; then
     stop_iotest
     error_exit "inconsistent md_monitor status after detaching left half"
@@ -144,12 +145,12 @@ if [ -n "$DEVNOS_RIGHT" ] ; then
 	push_recovery_fn "attach_dasd $userid ${dasd}"
 	echo "$(date) Waiting for 15 seconds ..."
 	sleep 15
-	md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
+	md_monitor -c"ArrayStatus:${MD_DEV}"
 	echo "$(date) Attach right device $devno ..."
 	if ! pop_recovery_fn ; then
 	    error_exit "Cannot attach DASD ${dasd}"
 	fi
-	md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
+	md_monitor -c"ArrayStatus:${MD_DEV}"
     done
 else
     for wwid in ${SCSIID_RIGHT} ; do
@@ -171,7 +172,7 @@ else
 
 	echo "$(date) Waiting for 15 seconds ..."
 	sleep 15
-	md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
+	md_monitor -c"ArrayStatus:${MD_DEV}"
 	echo "$(date) Attach right device $wwid ..."
 	while [ $recovery_fn -gt 0 ] ; do
 	    pop_recovery_fn || \
@@ -179,19 +180,19 @@ else
 	    (( recovery_fn-- )) || true
 	done
 
-	md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
+	md_monitor -c"ArrayStatus:${MD_DEV}"
     done
 fi
 
 echo "$(date) Wait for sync"
-if ! wait_for_sync ${MD_NUM} ; then
-    md_monitor -c"ArrayStatus:/dev/${MD_NUM}"
+if ! wait_for_sync ${MD_DEV} ; then
+    md_monitor -c"ArrayStatus:${MD_DEV}"
     stop_iotest
     error_exit "Failed to synchronize array"
 fi
 echo "$(date) sync finished"
 MD_LOG3="/tmp/monitor_${MD_NAME}_step3.log"
-md_monitor -c"ArrayStatus:/dev/${MD_NUM}" | sed -n 's/\(.*\) slot [0-9]*\/[0-9]* \(.*\)/\1 \2/p' | tee ${MD_LOG3}
+md_monitor -c"ArrayStatus:${MD_DEV}" | sed -n 's/\(.*\) slot [0-9]*\/[0-9]* \(.*\)/\1 \2/p' | tee ${MD_LOG3}
 if ! diff -pu ${MD_LOG1} ${MD_LOG3} ; then
     stop_iotest
     error_exit "inconsistent md monitor status after detaching right half"
@@ -205,4 +206,4 @@ stop_iotest
 echo "$(date) Umount filesystem ..."
 umount /mnt
 
-stop_md ${MD_NUM}
+stop_md ${MD_DEV}
