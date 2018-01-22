@@ -238,7 +238,12 @@ static struct md_monitor *lookup_md(struct udev_device *mddev, int remove)
 
 	pthread_mutex_lock(&md_lock);
 	list_for_each_entry(tmp, &md_list, entry) {
+		const char *tmpname = udev_device_get_sysname(tmp->device);
 		if (!strcmp(tmp->dev_name, mdname)) {
+			md = tmp;
+			break;
+		}
+		if (!strcmp(tmpname, mdname)) {
 			md = tmp;
 			break;
 		}
@@ -266,6 +271,10 @@ static struct md_monitor *lookup_md_alias(const char *mdpath)
 
 	pthread_mutex_lock(&md_lock);
 	list_for_each_entry(tmp, &md_list, entry) {
+		if (strlen(tmp->dev_name) && !strcmp(tmp->dev_name, mdname)) {
+			md = tmp;
+			break;
+		}
 		tmpname = udev_device_get_property_value(tmp->device,
 							 "MD_DEVNAME");
 		if (tmpname && !strcmp(tmpname, mdname)) {
@@ -344,10 +353,16 @@ out:
 static struct md_monitor *lookup_md_new(struct udev_device *md_dev)
 {
 	const char *mdname = udev_device_get_sysname(md_dev);
+	const char *alias_name;
 	struct md_monitor *tmp, *md = NULL;
 
+	alias_name = udev_device_get_property_value(md_dev, "MD_DEVICE");
 	pthread_mutex_lock(&md_lock);
 	list_for_each_entry(tmp, &md_list, entry) {
+		if (alias_name && !strcmp(tmp->dev_name, alias_name)) {
+			md = tmp;
+			break;
+		}
 		if (!strcmp(tmp->dev_name, mdname)) {
 			md = tmp;
 			break;
@@ -359,6 +374,8 @@ static struct md_monitor *lookup_md_new(struct udev_device *md_dev)
 			memset(md, 0, sizeof(struct md_monitor));
 		else
 			goto out_unlock;
+		if (alias_name)
+			mdname = alias_name;
 		if (strlen(mdname) > MD_NAMELEN) {
 			warn("%s: MD name overflow, truncated", mdname);
 		}
@@ -642,6 +659,7 @@ static void discover_devices(struct udev *udev)
 static void md_rdev_update_index(struct md_monitor *md,
 				 struct device_monitor *dev)
 {
+	const char *mdname = udev_device_get_sysname(md->device);
 	int ioctl_fd, i;
 	mdu_disk_info_t info;
 	char mdpath[256];
@@ -653,7 +671,7 @@ static void md_rdev_update_index(struct md_monitor *md,
 		return;
 	}
 
-	sprintf(mdpath, "/dev/%s", md->dev_name);
+	sprintf(mdpath, "/dev/%s", mdname);
 	ioctl_fd = open(mdpath, O_RDONLY|O_NONBLOCK);
 	if (ioctl_fd < 0) {
 		warn("%s: Couldn't open %s: %m", md->dev_name, mdpath);
@@ -1857,13 +1875,14 @@ static void remove_md(struct md_monitor *md_dev)
 
 static int check_md(struct md_monitor *md_dev, mdu_array_info_t *info)
 {
+	const char *mdname = udev_device_get_sysname(md_dev->device);
 	char devpath[256];
 	int ioctl_fd, rc = 0;
 
 	if (!md_dev)
 		return ENODEV;
 
-	sprintf(devpath, "/dev/%s", md_dev->dev_name);
+	sprintf(devpath, "/dev/%s", mdname);
 	ioctl_fd = open(devpath, O_RDONLY|O_NONBLOCK);
 	if (ioctl_fd >= 0) {
 		if (ioctl(ioctl_fd, GET_ARRAY_INFO, info) < 0) {
@@ -1922,8 +1941,18 @@ static int monitor_md(struct udev_device *md_dev)
 		found->layout = info.layout;
 		discover_md_components(found);
 	} else {
-		warn("%s: Already monitoring %s", found->dev_name,
-		       udev_device_get_devpath(found->device));
+		const char *alias_name;
+
+		alias_name = udev_device_get_property_value(md_dev,
+							    "MD_DEVNAME");
+		if (alias_name && strcmp(found->dev_name, alias_name)) {
+			info("%s: updating alias to %s\n",
+			     found->dev_name, alias_name);
+			strncpy(found->dev_name, alias_name, MD_NAMELEN);
+			found->dev_name[MD_NAMELEN - 1] = '\0';
+		} else
+			warn("%s: Already monitoring %s", found->dev_name,
+			     udev_device_get_devpath(found->device));
 	}
 	return 0;
 }
@@ -2033,6 +2062,7 @@ static int display_io_status(struct md_monitor *md_dev, char *buf, int buflen)
 
 static int display_md(struct md_monitor *md_dev, char *buf)
 {
+	const char *mdname = udev_device_get_sysname(md_dev->device);
 	struct device_monitor *dev;
 	mdu_array_info_t info;
 	char status[4096];
@@ -2056,7 +2086,7 @@ static int display_md(struct md_monitor *md_dev, char *buf)
 
 		pthread_mutex_unlock(&dev->lock);
 		len = sprintf(status, "%s: dev %s slot %d/%d status %s %s\n",
-			      md_dev->dev_name, dev->dev_name,
+			      mdname, dev->dev_name,
 			      dev->md_slot, md_dev->raid_disks,
 			      md_rdev_print_state(dev->md_status),
 			      device_io_print_state(dev->io_status));
@@ -2430,7 +2460,14 @@ void *cli_monitor_thread(void *ctx)
 			pthread_mutex_lock(&md_lock);
 			md_dev = NULL;
 			list_for_each_entry(tmp, &md_list, entry) {
+				const char *tmpname;
+
 				if (!strcmp(tmp->dev_name, mdstr)) {
+					md_dev = tmp;
+					break;
+				}
+				tmpname = udev_device_get_sysname(tmp->device);
+				if (tmpname && !strcmp(tmpname, mdstr)) {
 					md_dev = tmp;
 					break;
 				}
