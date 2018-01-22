@@ -343,6 +343,10 @@ static struct md_monitor *lookup_md_alias(const char *mdpath)
 
 	pthread_mutex_lock(&md_lock);
 	list_for_each_entry(tmp, &md_list, entry) {
+		if (strlen(tmp->dev_name) && !strcmp(tmp->dev_name, mdname)) {
+			md = tmp;
+			break;
+		}
 		tmpname = udev_device_get_property_value(tmp->device,
 							 "MD_DEVNAME");
 		if (tmpname && !strcmp(tmpname, mdname)) {
@@ -416,10 +420,16 @@ out:
 static struct md_monitor *lookup_md_new(struct udev_device *md_dev)
 {
 	const char *mdname = udev_device_get_sysname(md_dev);
+	const char *alias_name;
 	struct md_monitor *tmp, *md = NULL;
 
+	alias_name = udev_device_get_property_value(md_dev, "MD_DEVICE");
 	pthread_mutex_lock(&md_lock);
 	list_for_each_entry(tmp, &md_list, entry) {
+		if (alias_name && !strcmp(tmp->dev_name, alias_name)) {
+			md = tmp;
+			break;
+		}
 		if (!strcmp(tmp->dev_name, mdname)) {
 			md = tmp;
 			break;
@@ -431,6 +441,8 @@ static struct md_monitor *lookup_md_new(struct udev_device *md_dev)
 			memset(md, 0, sizeof(struct md_monitor));
 		else
 			goto out_unlock;
+		if (alias_name)
+			mdname = alias_name;
 		if (strlen(mdname) > MD_NAMELEN) {
 			warn("%s: MD name overflow, truncated", mdname);
 		}
@@ -2107,8 +2119,18 @@ static int monitor_md(struct udev_device *md_dev)
 		found->layout = info.layout;
 		discover_md_components(found);
 	} else {
-		warn("%s: Already monitoring %s", found->dev_name,
-		       udev_device_get_devpath(found->device));
+		const char *alias_name;
+
+		alias_name = udev_device_get_property_value(md_dev,
+							    "MD_DEVNAME");
+		if (alias_name && strcmp(found->dev_name, alias_name)) {
+			info("%s: updating alias to %s\n",
+			     found->dev_name, alias_name);
+			strncpy(found->dev_name, alias_name, MD_NAMELEN);
+			found->dev_name[MD_NAMELEN - 1] = '\0';
+		} else
+			warn("%s: Already monitoring %s", found->dev_name,
+			     udev_device_get_devpath(found->device));
 	}
 	return 0;
 }
@@ -2599,7 +2621,14 @@ void *cli_monitor_thread(void *ctx)
 			pthread_mutex_lock(&md_lock);
 			md_dev = NULL;
 			list_for_each_entry(tmp, &md_list, entry) {
+				const char *tmpname;
+
 				if (!strcmp(tmp->dev_name, mdstr)) {
+					md_dev = tmp;
+					break;
+				}
+				tmpname = udev_device_get_sysname(tmp->device);
+				if (tmpname && !strcmp(tmpname, mdstr)) {
 					md_dev = tmp;
 					break;
 				}
