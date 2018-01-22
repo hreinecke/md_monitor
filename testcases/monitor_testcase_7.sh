@@ -7,42 +7,43 @@ set -o errexit
 
 . $(dirname "$0")/monitor_testcase_functions.sh
 
-MD_NUM="md1"
 MD_NAME="testcase7"
+MD_DEV="/dev/md/${MD_NAME}"
+
 RESHAPE_TIMEOUT=60
 
-stop_md $MD_NUM
+stop_md $MD_DEV
 
 activate_dasds
 
 clear_metadata
 
 ulimit -c unlimited
-start_md $MD_NUM 6
+start_md $MD_NAME 6
 
 logger "${MD_NAME}: expand RAID"
 
 echo "Create filesystem ..."
-if ! mkfs.ext3 /dev/${MD_NUM} ; then
+if ! mkfs.ext3 ${MD_DEV} ; then
     error_exit "Cannot create fs"
 fi
 
 echo "Mount filesystem ..."
-if ! mount /dev/${MD_NUM} /mnt ; then
+if ! mount ${MD_DEV} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
 
 echo "Add ${DEVICES_LEFT[3]} ${DEVICES_RIGHT[3]}"
-mdadm --add /dev/${MD_NUM} \
+mdadm --add ${MD_DEV} \
     --failfast ${DEVICES_LEFT[3]} ${DEVICES_RIGHT[3]} \
     || error_exit "Cannot add devices"
 
 echo "Expand array"
-mdadm --grow /dev/${MD_NUM} --raid-devices=8 \
+mdadm --grow ${MD_DEV} --raid-devices=8 \
     || error_exit "Cannot expand array"
 
 echo "Waiting for reshape to finish"
-wait_for_sync ${MD_NUM} || \
+wait_for_sync ${MD_DEV} || \
     error_exit "Failed to synchronize array"
 
 
@@ -60,10 +61,10 @@ if [ $sleeptime -ge $RESHAPE_TIMEOUT ] ; then
 fi
 
 echo "Resize bitmap"
-mdadm --grow /dev/${MD_NUM} --bitmap=none \
+mdadm --grow ${MD_DEV} --bitmap=none \
     || error_exit "Cannot remove bitmap"
 
-mdadm --grow /dev/${MD_NUM} --bitmap=internal --bitmap-chunk=512K \
+mdadm --grow ${MD_DEV} --bitmap=internal --bitmap-chunk=512K \
     || error_exit "Cannot update bitmap size"
 
 cat /proc/mdstat
@@ -73,29 +74,29 @@ echo "Resize array"
 raid_size=$(sed -n 's/ *\([0-9]*\) blocks .*/\1/p' /proc/mdstat)
 raid_size=$(( raid_size / 8 ))
 raid_size=$(( raid_size * 6 ))
-mdadm --grow /dev/${MD_NUM} --array-size=$raid_size \
+mdadm --grow ${MD_DEV} --array-size=$raid_size \
     || error_exit "Cannot resize array"
 
-mdadm --grow /dev/${MD_NUM} --raid-devices=6 \
+mdadm --grow ${MD_DEV} --raid-devices=6 \
     || error_exit "Cannot reshape array"
 
-wait_for_sync ${MD_NUM} \
+wait_for_sync ${MD_DEV} \
     || error_exit "Failed to synchronize array"
 
 sleep 5
 
 # Bug#763212
 echo "Removing spare devices"
-for dev in $(mdadm --detail /dev/${MD_NUM} | sed -n 's/.*spare *\(\/dev\/dasd[a-z]*[0-9]*\)/\1/p') ; do
-    mdadm --manage /dev/${MD_NUM} --remove ${dev} \
+for dev in $(mdadm --detail ${MD_DEV} | sed -n 's/.*spare *\(\/dev\/dasd[a-z]*[0-9]*\)/\1/p') ; do
+    mdadm --manage ${MD_DEV} --remove ${dev} \
 	|| error_exit "Cannot remove spare device ${dev}"
 done
 
-mdadm --detail /dev/${MD_NUM}
+mdadm --detail ${MD_DEV}
 
 logger "${MD_NAME}: success"
 
 echo "Umount filesystem ..."
 umount /mnt
 
-stop_md $MD_NUM
+stop_md $MD_DEV

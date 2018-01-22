@@ -7,25 +7,25 @@ set -o errexit
 
 . $(dirname "$0")/monitor_testcase_functions.sh
 
-MD_NUM="md1"
 MD_NAME="testcase11"
+MD_DEV="/dev/md/${MD_NAME}"
 NUM_STEPS=8
 
-stop_md $MD_NUM
+stop_md $MD_DEV
 
 activate_dasds 16
 
 clear_metadata
 
 ulimit -c unlimited
-start_md ${MD_NUM} 8
+start_md ${MD_NAME} 8
 
 logger "${MD_NAME}: Multiple Array startup/shutdown"
 
 sleep 1
-echo -n "MonitorStatus on /dev/${MD_NUM}: "
+echo -n "MonitorStatus on ${MD_DEV}: "
 MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
-md_monitor -c"MonitorStatus:/dev/${MD_NUM}" | tee ${MD_LOG1}
+md_monitor -c"MonitorStatus:${MD_DEV}" | tee ${MD_LOG1}
 
 n=4
 devlist=
@@ -151,4 +151,4 @@ logger "${MD_NAME}: success"
 mdadm --stop /dev/${MD2_NAME}
 mdadm --stop /dev/${MD3_NAME}
 
-stop_md ${MD_NUM}
+stop_md ${MD_DEV}

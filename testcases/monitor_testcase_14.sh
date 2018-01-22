@@ -7,28 +7,30 @@ set -o errexit
 
 . $(dirname "$0")/monitor_testcase_functions.sh
 
-MD_NUM="md1"
 MD_NAME="testcase14"
+MD_DEV="/dev/md/${MD_NAME}"
+
 MONITOR_TIMEOUT=60
 
 logger "Monitor Testcase 14: Disk quiesce/resume"
 
-stop_md $MD_NUM
+stop_md $MD_DEV
 
 activate_dasds
 
 clear_metadata
 
 ulimit -c unlimited
-start_md ${MD_NUM}
+start_md ${MD_NAME}
+MD_NUM=$(resolve_md ${MD_DEV})
 
 echo "$(date) Create filesystem ..."
-if ! mkfs.ext3 /dev/${MD_NUM} ; then
+if ! mkfs.ext3 ${MD_DEV} ; then
     error_exit "Cannot create fs"
 fi
 
 echo "$(date) Mount filesystem ..."
-if ! mount /dev/${MD_NUM} /mnt ; then
+if ! mount ${MD_DEV} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
 
@@ -61,7 +63,7 @@ else
     error_exit "$working_disks / $raid_disks are still working"
 fi
 
-md_monitor -c "MonitorStatus:/dev/${MD_NUM}"
+md_monitor -c "MonitorStatus:${MD_DEV}"
 
 echo "$(date) Write test file 2 ..."
 dd if=/dev/zero of=/mnt/testfile2 bs=4096 count=1024
@@ -82,7 +84,7 @@ done
 echo "$(date) Wait for 10 seconds"
 sleep 10
 
-md_monitor -c "MonitorStatus:/dev/${MD_NUM}"
+md_monitor -c "MonitorStatus:${MD_DEV}"
 
 echo "$(date) Resume disks on second half ..."
 for d in ${DEVICES_RIGHT[@]} ; do
@@ -90,7 +92,7 @@ for d in ${DEVICES_RIGHT[@]} ; do
 	error_exit "Cannot resume /dev/${d}"
 done
 
-md_monitor -c "MonitorStatus:/dev/${MD_NUM}"
+md_monitor -c "MonitorStatus:${MD_DEV}"
 
 echo "Write test file 4 ..."
 dd if=/dev/zero of=/mnt/testfile4 bs=4096 count=1024
@@ -125,19 +127,19 @@ else
 fi
 
 echo "$(date) MD status"
-mdadm --detail /dev/${MD_NUM}
+mdadm --detail ${MD_DEV}
 
 echo "$(date) Wait for sync"
-wait_for_sync ${MD_NUM} || \
+wait_for_sync ${MD_DEV} || \
     error_exit "Failed to synchronize array"
 
 MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
-mdadm --detail /dev/${MD_NUM} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG1}
+mdadm --detail ${MD_DEV} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG1}
 if ! diff -u "${START_LOG}" "${MD_LOG1}" ; then
-    error_exit "current ${MD_NUM} state differs after test but should be identical to initial state"
+    error_exit "current ${MD_NAME} state differs after test but should be identical to initial state"
 fi
 
 echo "$(date) Umount filesystem ..."
 umount /mnt
 
-stop_md ${MD_NUM}
+stop_md ${MD_DEV}

@@ -7,8 +7,8 @@ set -o errexit
 
 . $(dirname "$0")/monitor_testcase_functions.sh
 
-MD_NUM="md1"
 MD_NAME="testcase4"
+MD_DEV="/dev/md/${MD_NAME}"
 MONITOR_TIMEOUT=60
 
 function attach_dasd() {
@@ -24,7 +24,7 @@ function attach_dasd() {
     fi
 }
 
-stop_md $MD_NUM
+stop_md $MD_DEV
 
 activate_dasds
 
@@ -37,17 +37,18 @@ if [ -z "$userid" ] ; then
 fi
 
 ulimit -c unlimited
-start_md ${MD_NUM}
+start_md ${MD_NAME}
+MD_NUM=$(resolve_md ${MD_DEV})
 
 logger "${MD_NAME}: Disk detach/attach"
 
 echo "$(date) Create filesystem ..."
-if ! mkfs.ext3 /dev/${MD_NUM} ; then
+if ! mkfs.ext3 ${MD_DEV} ; then
     error_exit "Cannot create fs"
 fi
 
 echo "$(date) Mount filesystem ..."
-if ! mount /dev/${MD_NUM} /mnt ; then
+if ! mount ${MD_DEV} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
 
@@ -84,7 +85,7 @@ fi
 
 echo "$(date) Wait for 10 seconds"
 sleep 10
-mdadm --detail /dev/${MD_NUM}
+mdadm --detail ${MD_DEV}
 
 echo "$(date) Re-attach disk on first half ..."
 while true ; do
@@ -117,19 +118,19 @@ else
 fi
 
 echo "$(date) MD status"
-mdadm --detail /dev/${MD_NUM}
+mdadm --detail ${MD_DEV}
 
 echo "$(date) Stop I/O test"
 stop_iotest
 
 echo "$(date) Wait for sync"
-wait_for_sync ${MD_NUM} || \
+wait_for_sync ${MD_DEV} 1 || \
     error_exit "Failed to synchronize array"
 
 MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
-mdadm --detail /dev/${MD_NUM} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG1}
+mdadm --detail ${MD_DEV} | sed '/Update Time/D;/Events/D' | tee ${MD_LOG1}
 if ! diff -u "${START_LOG}" "${MD_LOG1}" ; then
-    error_exit "current ${MD_NUM} state differs after test but should be identical to initial state"
+    error_exit "current ${MD_NAME} state differs after test but should be identical to initial state"
 fi
 
 if [ "$detach_other_half" ] ; then
@@ -160,7 +161,7 @@ if [ "$detach_other_half" ] ; then
     fi
 
     sleep 5
-    mdadm --detail /dev/${MD_NUM}
+    mdadm --detail ${MD_DEV}
     ls /mnt
     echo "Re-attach disk on second half ..."
     while true ; do
@@ -192,10 +193,10 @@ if [ "$detach_other_half" ] ; then
 	error_exit "$(date) ERROR: $num devices are still faulty"
     fi
     
-    wait_for_sync ${MD_NUM} || \
+    wait_for_sync ${MD_DEV} || \
 	error_exit "Failed to synchronize array"
 
-    mdadm --detail /dev/${MD_NUM}
+    mdadm --detail ${MD_DEV}
 fi
 
 logger "${MD_NAME}: success"
@@ -203,4 +204,4 @@ logger "${MD_NAME}: success"
 echo "$(date) Umount filesystem ..."
 umount /mnt
 
-stop_md ${MD_NUM}
+stop_md ${MD_DEV}

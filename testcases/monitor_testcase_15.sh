@@ -106,7 +106,7 @@ else
 fi
 
 echo "$(date) MD status"
-mdadm --detail /dev/${MD_NUM}
+mdadm --detail ${MD_DEV}
 
 echo "$(date) Wait for $IO_TIMEOUT seconds"
 sleep $IO_TIMEOUT
@@ -168,12 +168,12 @@ else
 fi
 
 echo "$(date) MD status"
-mdadm --detail /dev/${MD_NUM}
+mdadm --detail ${MD_DEV}
 
 echo "$(date) Wait for sync ..."
-wait_for_sync ${MD_NUM} || \
+wait_for_sync ${MD_DEV} || \
     error_exit "Failed to synchronize array"
 
-mdadm --detail /dev/${MD_NUM}
+mdadm --detail ${MD_DEV}
 
 true

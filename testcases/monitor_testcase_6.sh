@@ -7,27 +7,29 @@ set -o errexit
 
 . $(dirname "$0")/monitor_testcase_functions.sh
 
-MD_NUM="md1"
 MD_NAME="testcase6"
+MD_DEV="/dev/md/${MD_NAME}"
+
 IO_TIMEOUT=10
 MONITOR_TIMEOUT=15
 
-stop_md $MD_NUM
+stop_md $MD_DEV
 
 activate_dasds
 
 clear_metadata
 
 ulimit -c unlimited
-start_md $MD_NUM
+start_md $MD_NAME
+MD_NUM=$(resolve_md ${MD_DEV})
 
 echo "$(date) Create filesystem ..."
-if ! mkfs.ext3 /dev/${MD_NUM} ; then
+if ! mkfs.ext3 ${MD_DEV} ; then
     error_exit "Cannot create fs"
 fi
 
 echo "$(date) Mount filesystem ..."
-if ! mount /dev/${MD_NUM} /mnt ; then
+if ! mount ${MD_DEV} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
 
@@ -110,7 +112,7 @@ else
 fi
 
 echo "$(date) MD status"
-mdadm --detail /dev/${MD_NUM}
+mdadm --detail ${MD_DEV}
 
 echo "$(date) Wait for $IO_TIMEOUT seconds"
 sleep $IO_TIMEOUT
@@ -171,20 +173,20 @@ else
 fi
 
 echo "$(date) MD status"
-mdadm --detail /dev/${MD_NUM}
+mdadm --detail ${MD_DEV}
 
 echo "$(date) Stop I/O test"
 stop_iotest
 
 echo "$(date) Wait for sync ..."
-wait_for_sync ${MD_NUM} || \
+wait_for_sync ${MD_DEV} || \
     error_exit "Failed to synchronize array"
 
-mdadm --detail /dev/${MD_NUM}
+mdadm --detail ${MD_DEV}
 
 logger "${MD_NAME}: success"
 
 echo "$(date) Umount filesystem ..."
 umount /mnt
 
-stop_md ${MD_NUM}
+stop_md ${MD_DEV}

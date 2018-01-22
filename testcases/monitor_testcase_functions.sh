@@ -26,7 +26,7 @@ function error_exit() {
 }
 
 function start_md() {
-    local MD_NUM=$1
+    local MD_NAME=$1
     local MD_DEVICES=$2
     local MD_MONITOR=/sbin/md_monitor
     local MD_SCRIPT=/usr/share/misc/md_notify_device.sh
@@ -35,17 +35,7 @@ function start_md() {
     local n=0
     local devlist
 
-    case "$MD_NUM" in
-	md*)
-	    MD_DEVNAME=/dev/$MD_NUM
-	    ;;
-	*)
-	    MD_NAME=$1
-	    MD_NUM=$2
-	    MD_DEVICES=$3
-	    MD_DEVNAME=/dev/md/$MD_NAME
-	    ;;
-    esac
+    MD_DEVNAME=/dev/md/$MD_NAME
     if [ -z "$MD_DEVICES" ] ; then
 	MD_DEVICES=$MD_DEVNUM
     fi
@@ -412,7 +402,8 @@ function wait_for_sync () {
   local ELAPSED_TIME;
   local status;
   local resync_time;
-  local MD=$1
+  local MD
+  local MD_DEV=$1
   local wait_for_bitmap=$2
   local RAIDLVL
   local raid_status
@@ -421,10 +412,7 @@ function wait_for_sync () {
   local MONITORTIMEOUT=30
   local RESYNCSPEED=4000
 
-  if [ ! -L /sys/block/$MD ] ; then
-      md_link=$(readlink /dev/$MD)
-      MD=${md_link##*/}
-  fi
+  MD=$(resolve_md ${MD_DEV})
       
   local RAIDLVL=$(sed -n "s/${MD}.*\(raid[0-9]*\) .*/\1/p" /proc/mdstat)
   if [ -z "$RAIDLVL" ] ; then
@@ -440,7 +428,7 @@ function wait_for_sync () {
   fi
   if [ $raid_disks -eq 0 ] ; then
       echo "ERROR: No raid disks on mirror ${MD}"
-      mdadm --detail /dev/${MD}
+      mdadm --detail ${MD_DEV}
       return 1
   fi
 
@@ -482,10 +470,10 @@ function wait_for_sync () {
   done
   if [ $wait_time -ge $MONITORTIMEOUT ] ; then
       echo "ERROR: recovery didn't start after $MONITORTIMEOUT seconds"
-      mdadm --detail /dev/$MD
+      mdadm --detail ${MD_DEV}
       return 1
   fi
-  wait_md ${MD}
+  wait_md ${MD_DEV}
 
   if [ "$action" != "reshape" ] ; then
       # Reset sync speed
@@ -500,7 +488,7 @@ function wait_for_sync () {
   working_disks=${raid_status#*/}
   if [ $raid_disks -ne $working_disks ] ; then
       echo "ERROR: mirror $MD degraded after recovery"
-      mdadm --detail /dev/$MD
+      mdadm --detail ${MD_DEV}
       return 1;
   fi
   if [ "$wait_for_bitmap" ] ; then

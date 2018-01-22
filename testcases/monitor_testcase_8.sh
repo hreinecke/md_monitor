@@ -7,11 +7,11 @@ set -o errexit
 
 . $(dirname "$0")/monitor_testcase_functions.sh
 
-MD_NUM="md1"
 MD_NAME="testcase8"
+MD_DEV="/dev/md/${MD_NAME}"
 SLEEPTIME=30
 
-stop_md $MD_NUM
+stop_md $MD_DEV
 
 activate_dasds
 
@@ -25,22 +25,23 @@ if [ -z "$userid" ] ; then
     exit 0
 fi
 ulimit -c unlimited
-start_md $MD_NUM
+start_md $MD_NAME
+MD_NUM=$(resolve_md ${MD_DEV})
 
 echo "Create filesystem ..."
-if ! mkfs.ext3 /dev/${MD_NUM} ; then
+if ! mkfs.ext3 ${MD_DEV} ; then
     error_exit "Cannot create fs"
 fi
 
 echo "Mount filesystem ..."
-if ! mount /dev/${MD_NUM} /mnt ; then
+if ! mount ${MD_DEV} /mnt ; then
     error_exit "Cannot mount MD array."
 fi
 
 logger "${MD_NAME}: Accidental DASD overwrite"
 
 MD_LOG1="/tmp/monitor_${MD_NAME}_step1.log"
-mdadm --detail /dev/${MD_NUM} | grep Devices > ${MD_LOG1}
+mdadm --detail ${MD_DEV} | grep Devices > ${MD_LOG1}
 
 echo "Run I/O test"
 run_iotest /mnt
@@ -80,21 +81,21 @@ stop_iotest
 sleep 5
 
 echo "MD status"
-mdadm --detail /dev/${MD_NUM}
+mdadm --detail ${MD_DEV}
 
-old_status=$(md_monitor -c "MonitorStatus:/dev/${MD_NUM}")
+old_status=$(md_monitor -c "MonitorStatus:${MD_DEV}")
 echo "Monitor status: $old_status"
 
 echo "Reset Disk ${DEVICES_LEFT[0]}"
 for d in ${DEVICES_LEFT[0]} ; do
-    /sbin/md_monitor -c "Remove:/dev/${MD_NUM}@$d"
+    /sbin/md_monitor -c "Remove:${MD_DEV}@$d"
 
-    if ! mdadm --manage /dev/${MD_NUM} --remove $d ; then
-	error_exit "Cannot remove $d in MD array $MD_NUM"
+    if ! mdadm --manage ${MD_DEV} --remove $d ; then
+	error_exit "Cannot remove $d in MD array $MD_NAME"
     fi
-    md_status=$(md_monitor -c "MonitorStatus:/dev/${MD_NUM}")
+    md_status=$(md_monitor -c "MonitorStatus:${MD_DEV}")
     echo "Monitor status: $md_status"
-    wait_md ${MD_NUM}
+    wait_md ${MD_DEV}
 
     if ! dasdfmt -p -y -b 4096 -f ${d%1} ; then
 	error_exit "Cannot format device ${d%1}"
@@ -104,15 +105,15 @@ for d in ${DEVICES_LEFT[0]} ; do
 	error_exit "Cannot partition device ${d%1}"
     fi
     sleep 2
-    if ! mdadm --manage /dev/${MD_NUM} --add --failfast $d ; then
-	error_exit "Cannot add $d to MD array $MD_NUM"
+    if ! mdadm --manage ${MD_DEV} --add --failfast $d ; then
+	error_exit "Cannot add $d to MD array $MD_NAME"
     fi
 done
 
 MD_TIMEOUT=15
 wait_time=0
 while [ $wait_time -lt $MD_TIMEOUT ] ; do
-    new_status=$(md_monitor -c "MonitorStatus:/dev/${MD_NUM}")
+    new_status=$(md_monitor -c "MonitorStatus:${MD_DEV}")
     [ $new_status != $old_status ] && break
     sleep 1
     (( wait_time++ )) || true
@@ -122,18 +123,18 @@ if [ $wait_time -ge $MD_TIMEOUT ] ; then
 fi
 echo "Monitor status: $new_status"
 
-wait_md ${MD_NUM}
+wait_md ${MD_DEV}
 echo "MD status after mdadm --wait:"
 cat /proc/mdstat
 
-if ! wait_for_sync ${MD_NUM} ; then
+if ! wait_for_sync ${MD_DEV} ; then
     error_exit "Failed to synchronize array"
 fi
 
 MD_LOG2="/tmp/monitor_${MD_NAME}_step2.log"
-mdadm --detail /dev/${MD_NUM} | grep Devices > ${MD_LOG2}
+mdadm --detail ${MD_DEV} | grep Devices > ${MD_LOG2}
 if ! diff -u "${MD_LOG1}" "${MD_LOG2}" ; then
-    error_exit "Not all devices on ${MD_NUM} are working"
+    error_exit "Not all devices on ${MD_NAME} are working"
 fi
 # The array configuration is different from the original one,
 # so we cannot compare the final and the initial state
@@ -144,4 +145,4 @@ logger "${MD_NAME}: success"
 echo "Umount filesystem ..."
 umount /mnt
 
-stop_md $MD_NUM
+stop_md $MD_DEV
