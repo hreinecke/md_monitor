@@ -127,16 +127,19 @@ function stop_iostat() {
 }
 
 function stop_md() {
+    local md_dev=$1
     local md
     local md_detail
-    local cur_md=$1
+    local cur_md
+
+    cur_md=$(resolve_md $md_dev)
 
     if ! grep -q ${cur_md} /proc/mdstat ; then
 	return
     fi
     STOP_LOG="/tmp/monitor_${MD_NAME}_mdstat_stop.log"
     if [ -n "${START_LOG}" ] ; then
-	mdadm --detail /dev/${cur_md} | sed '/Update Time/D;/Events/D' | tee ${STOP_LOG}
+	mdadm --detail ${md_dev} | sed '/Update Time/D;/Events/D' | tee ${STOP_LOG}
 	if ! diff -u ${START_LOG} ${STOP_LOG} ; then
 	    echo "MD array configuration inconsistent"
 	    exit 1
@@ -165,10 +168,23 @@ function stop_md() {
     rm -f /tmp/monitor_${MD_NAME}_step*.log
 }
 
-function wait_md() {
-    local MD_NUM=$1
+function resolve_md() {
+    local MD_NAME=$1
 
-    mdadm --wait /dev/${MD_NUM} || true
+    if [ -L "$MD_NAME" ] ; then
+	md_link=$(readlink $MD_NAME)
+	MD_NUM=${md_link##*/}
+    else
+	MD_NUM=${MD_NAME##*/}
+    fi
+    echo "$MD_NUM"
+    exit 0
+}
+
+function wait_md() {
+    local MD_DEV=$1
+
+    mdadm --wait ${MD_DEV} || true
 }
 
 function activate_dasds() {
