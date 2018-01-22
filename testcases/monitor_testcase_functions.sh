@@ -137,6 +137,10 @@ function stop_md() {
     if ! grep -q ${cur_md} /proc/mdstat ; then
 	return
     fi
+    if [ -d /sys/block/$cur_md/md/bitmap ] ; then
+	echo 0 > /sys/block/$cur_md/md/bitmap/time_base
+	sleep 2
+    fi
     STOP_LOG="/tmp/monitor_${MD_NAME}_mdstat_stop.log"
     if [ -n "${START_LOG}" ] ; then
 	mdadm --detail ${md_dev} | sed '/Update Time/D;/Events/D' | tee ${STOP_LOG}
