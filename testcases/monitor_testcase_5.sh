@@ -2,6 +2,8 @@
 #
 # Testcase 5: chpid on/off
 #
+# All DASDs on each half are supposed to reside on one CHPID
+#
 
 set -o errexit
 
@@ -11,9 +13,6 @@ MD_NAME="testcase5"
 MD_DEV="/dev/md/${MD_NAME}"
 
 MONITOR_TIMEOUT=60
-
-CHPID_LEFT="0.13"
-CHPID_RIGHT="0.1b"
 
 detach_other_half=1
 
@@ -29,6 +28,38 @@ fi
 stop_md ${MD_DEV}
 
 activate_devices
+
+CHPID_LEFT=0.00
+for d in ${DASDS_LEFT[@]} ; do
+    chpids=$(cd -P /sys/block/$d/device; cd ..; cat chpids)
+    for c in $chpids ; do
+	chpid=$(printf "0.%02x" 0x${c})
+	[ "$chpid" == "0.00" ] && continue
+	if [ "$CHPID_LEFT" != "0.00" ] ; then
+	    if [ "$CHPID_LEFT" != "$chpid" ] ; then
+		error_exit "More than one chpid for the left side specified"
+	    fi
+	else
+	    CHPID_LEFT=$chpid
+	fi
+    done
+done
+
+CHPID_RIGHT=0.00
+for d in ${DASDS_RIGHT[@]} ; do
+    chpids=$(cd -P /sys/block/$d/device; cd ..; cat chpids)
+    for c in $chpids ; do
+	chpid=$(printf "0.%02x" 0x${c})
+	[ "$chpid" == "0.00" ] && continue
+	if [ "$CHPID_RIGHT" != "0.00" ] ; then
+	    if [ "$CHPID_RIGHT" != "$chpid" ] ; then
+		error_exit "More than one chpid for the right side specified"
+	    fi
+	else
+	    CHPID_RIGHT=$chpid
+	fi
+    done
+done
 
 clear_metadata
 
