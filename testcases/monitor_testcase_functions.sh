@@ -576,7 +576,15 @@ function wait_for_sync () {
       mdadm --detail ${MD_DEV}
       return 1
   fi
-
+  # Reshaping might not have been started, at which point the new disks
+  # will show up in the device list but not the array disk count
+  num_disks=0
+  for d in $(sed -n 's/.*active raid10 \(.*\)/\1/p' /proc/mdstat) ; do
+      (( num_disks++ )) || true
+  done
+  if [ $num_disks -gt $raid_disks ] ; then
+      raid_disks=$num_disks
+  fi
   # This is tricky
   # Recovery is done in several stages
   # 1. The failed devices are removed
