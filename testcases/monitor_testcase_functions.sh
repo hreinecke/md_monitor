@@ -74,7 +74,7 @@ function start_md() {
     mdadm --brief --detail ${MD_DEVNAME} >> /etc/mdadm.conf
     echo "PROGRAM ${MD_SCRIPT}" >> /etc/mdadm.conf
 
-    if ! which journalctl ; then
+    if ! which journalctl > /dev/null 2>&1 ; then
 	rm /var/log/messages
 	rcsyslog restart
     fi
@@ -188,7 +188,7 @@ function stop_md() {
 function write_log() {
     local MD_NAME=$1
 
-    if which journalctl ; then
+    if which journalctl > /dev/null 2>&1 ; then
 	journalctl --since "$STARTDATE" > /tmp/monitor_${MD_NAME}.log
     else
 	cp /var/log/messages /tmp/monitor_${MD_NAME}.log
