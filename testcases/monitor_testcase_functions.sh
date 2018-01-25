@@ -152,12 +152,13 @@ function stop_md() {
     local md_detail
     local cur_md
 
-    cur_md=$(resolve_md $md_dev)
-
-    if ! grep -q "${cur_md} " /proc/mdstat 2> /dev/null ; then
-	return
+    if [ "$md_dev" ] ; then
+	cur_md=$(resolve_md $md_dev)
+	if ! grep -q "${cur_md} " /proc/mdstat 2> /dev/null ; then
+	    return
+	fi
+	mdadm --misc /dev/${cur_md} --wait-clean
     fi
-    mdadm --misc ${md_dev} --wait-clean
     check_md_log stop
     trap - EXIT
     stop_monitor
@@ -165,7 +166,7 @@ function stop_md() {
     stop_iostat
     rm -f ${START_LOG}
     for md in $(sed -n 's/^\(md[0-9]*\) .*/\1/p' /proc/mdstat) ; do
-	if [ "$md" = "$cur_md" ] ; then
+	if [ -n "$cur_md"] && [ "$md" = "$cur_md" ] ; then
 	    if grep -q /dev/$md /proc/mounts ; then
 		echo "Unmounting filesystems ..."
 		if ! umount /dev/$md ; then
@@ -173,9 +174,9 @@ function stop_md() {
 		    exit 1
 		fi
 	    fi
-	    echo "Stopping MD array ..."
-	    mdadm --stop /dev/$md
 	fi
+	echo "Stopping MD array ..."
+	mdadm --stop /dev/$md
     done
     clear_metadata
     if [ -n "$STARTDATE" ] ; then
