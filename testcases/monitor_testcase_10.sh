@@ -70,6 +70,7 @@ wait_md ${MD_DEV}
 runtime=$(date +%s)
 elapsed=$(( $runtime - $starttime ))
 echo "mdadm completed after $elapsed seconds"
+MD_TIMEOUT=15
 if ! wait_for_monitor $MD_DEV $old_status $MD_TIMEOUT ; then
     error_exit "Monitor status hasn't changed for $MD_TIMEOUT seconds"
 fi
