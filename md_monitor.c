@@ -885,9 +885,10 @@ int md_set_attribute(struct md_monitor *md_dev, const char *attr,
 		warn("%s: cannot set '%s' attribute to '%s': %m",
 		     md_name, attr, value);
 		rc = errno;
+	} else {
+		info("%s: '%s' = '%s' -> '%s'", md_name, attr, status, value);
+		rc = 0;
 	}
-	info("%s: '%s' = '%s' -> '%s'", md_name, attr, status, value);
-	rc = 0;
 remove:
 	if (attr_fd >= 0)
 		close(attr_fd);
