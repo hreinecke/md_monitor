@@ -1167,8 +1167,8 @@ static void add_component(struct md_monitor *md, struct device_monitor *dev,
 		return;
 
 	md_namelen = strlen(md_name);
-	if (md_namelen > MD_NAMELEN)
-		md_namelen = MD_NAMELEN;
+	if (md_namelen >= MD_NAMELEN)
+		md_namelen = MD_NAMELEN - 1;
 
 	info("%s: Add component %s (%d/%d)", dev->dev_name, md_name,
 	     dev->md_index, dev->md_slot);
