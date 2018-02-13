@@ -281,7 +281,7 @@ int mpath_modify_queueing(struct device_monitor *dev, int enable, int timeout)
 		     dev->dev_name, strerror(-ret));
 	} else {
 		/* multipathd calculates the length including the NULL byte */
-		if (len && reply[len - 2] == '\n') {
+		if (len > 1 && reply[len - 2] == '\n') {
 			len--;
 			reply[len - 1] = 0;
 		}
