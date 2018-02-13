@@ -659,7 +659,7 @@ static void discover_devices(struct udev *udev)
 static void md_rdev_update_index(struct md_monitor *md,
 				 struct device_monitor *dev)
 {
-	const char *mdname = udev_device_get_sysname(md->device);
+	const char *mdname;
 	int ioctl_fd, i;
 	mdu_disk_info_t info;
 	char mdpath[256];
@@ -670,7 +670,7 @@ static void md_rdev_update_index(struct md_monitor *md,
 		dbg("No MD array found");
 		return;
 	}
-
+	mdname =  = udev_device_get_sysname(md->device);
 	sprintf(mdpath, "/dev/%s", mdname);
 	ioctl_fd = open(mdpath, O_RDONLY|O_NONBLOCK);
 	if (ioctl_fd < 0) {
