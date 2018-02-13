@@ -1876,13 +1876,14 @@ static void remove_md(struct md_monitor *md_dev)
 
 static int check_md(struct md_monitor *md_dev, mdu_array_info_t *info)
 {
-	const char *mdname = udev_device_get_sysname(md_dev->device);
+	const char *mdname;
 	char devpath[256];
 	int ioctl_fd, rc = 0;
 
 	if (!md_dev)
 		return ENODEV;
 
+	mdname = udev_device_get_sysname(md_dev->device);
 	sprintf(devpath, "/dev/%s", mdname);
 	ioctl_fd = open(devpath, O_RDONLY|O_NONBLOCK);
 	if (ioctl_fd >= 0) {
