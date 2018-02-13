@@ -1357,9 +1357,9 @@ static void fail_mirror(struct device_monitor *dev, enum md_rdev_status status)
 		info("%s: Failing all devices on side %d, status %s",
 		     md_name, side, md_rdev_print_state(status));
 		if (list_empty(&md_dev->pending)) {
-			pthread_mutex_lock(&pending_lock);
 			md_dev->pending_status = status;
 			md_dev->pending_side = (1 << side);
+			pthread_mutex_lock(&pending_lock);
 			list_add(&md_dev->pending, &pending_list);
 			pthread_cond_signal(&pending_cond);
 			pthread_mutex_unlock(&pending_lock);
@@ -1462,9 +1462,9 @@ static void reset_mirror(struct device_monitor *dev)
 	     ready_devices, md_dev->raid_disks);
 
 	pthread_mutex_lock(&md_dev->status_lock);
-	pthread_mutex_lock(&pending_lock);
 	md_dev->pending_status = IN_SYNC;
 	md_dev->pending_side = (1 << side);
+	pthread_mutex_lock(&pending_lock);
 	list_add(&md_dev->pending, &pending_list);
 	pthread_cond_signal(&pending_cond);
 	pthread_mutex_unlock(&pending_lock);
