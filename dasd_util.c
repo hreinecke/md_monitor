@@ -102,9 +102,10 @@ int dasd_set_attribute(struct device_monitor *dev, const char *attr, int value)
 			warn("%s: cannot set '%s' attribute to '%s': %m",
 			     dev->dev_name, attr, status);
 			rc = -errno;
+		} else {
+			info("%s: '%s' = '%s'", dev->dev_name, attr, status);
+			rc = len;
 		}
-		info("%s: '%s' = '%s'", dev->dev_name, attr, status);
-		rc = len;
 	}
 out_close:
 	if (attr_fd >= 0)
