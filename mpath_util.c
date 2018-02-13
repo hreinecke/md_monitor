@@ -360,6 +360,7 @@ void *mpath_status_thread (void *ctx)
 		ptr = strchr(reply, '\n');
 		if (!ptr) {
 			warn("Parse error in multipath header '%s'", reply);
+			free(reply);
 			break;
 		}
 		ptr++;
