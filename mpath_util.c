@@ -376,7 +376,7 @@ void *mpath_status_thread (void *ctx)
 			while (*ptr == ' ' && ptr < reply + len)
 				ptr++;
 			if (ptr == reply + len) {
-				ptr = '\0';
+				*ptr = '\0';
 				len --;
 			}
 			num_paths = strtoul(ptr, &eptr, 10);
