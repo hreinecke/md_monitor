@@ -237,7 +237,7 @@ enum device_io_status mpath_check_status(struct device_monitor *dev,
 	while (ptr && ptr < reply + len && *ptr == ' ') ptr++;
 	if (!strncmp(ptr, "off", 3))
 		io_status = IO_FAILED;
-	else if (!*ptr == '-')
+	else if (*ptr == '-')
 		io_status = IO_PENDING;
 	else
 		io_status = IO_RETRY;
@@ -398,7 +398,7 @@ void *mpath_status_thread (void *ctx)
 				       *ptr == ' ') ptr++;
 				if (!strncmp(ptr, "off", 3))
 					io_status = IO_FAILED;
-				else if (!*ptr == '-')
+				else if (*ptr == '-')
 					io_status = IO_PENDING;
 				else
 					io_status = IO_RETRY;
