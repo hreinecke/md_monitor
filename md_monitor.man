@@ -1,4 +1,4 @@
-.TH "md_monitor" "8" "Fri Aug 28 2015" "md_monitor 5.3"
+.TH "md_monitor" "8" "Fri Apr 13 2018" "md_monitor 5.4"
 .de bu
 .IP \(bu
 ..
