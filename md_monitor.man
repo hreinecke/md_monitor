@@ -9,6 +9,7 @@ md_monitor \- MD device monitor
 [\fI-d\fR|\fI--daemonize\fR]
 [\fI-f \fBfile\fR|\fI--logfile \fBfile\fR]
 [\fI-s\fR|\fI--syslog\fR]
+[\fI-S \fBnum\fR|\fI--stack-size=\fBnum\fR]
 [\fI-e \fBnum\fR|\fI--expires=\fBnum\fR]
 [\fI-P \fBnum\fR|\fI--process-limit=\fBnum\fR]
 [\fI-O \fBnum\fR|\fI--open-file-limit=\fBnum\fR]
@@ -69,6 +70,10 @@ Set failfast_retries to \fBnum\fR.
 .TP
 \fI-s\fR, \fI--syslog\fR
 Write logging information to syslog.
+.TP
+\fI-S \fBnum\fR, \fI--stack-size=\fBnum\fR
+Set pthread stack size to \fBnum\fR kB; default is 64. The new pthread
+stack size must be larger than the default value.
 .TP
 \fI-t \fBsecs\fR, \fI--check-timeout=\fBsecs\fR
 Run path checker every \fBsecs\fR seconds. Default is 1.

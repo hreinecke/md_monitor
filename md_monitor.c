@@ -3027,6 +3027,7 @@ void usage(void)
 	    "  --fail-mirror                  fail entire mirror side\n"
 	    "  --fail-disk                    fail affected disk only\n"
 	    "  --syslog                       use syslog for logging\n"
+	    "  --stack-size=<num>             set pthread stack size to <num> kB\n"
 	    "  --check-timeout=<secs>         run path checker every <secs> seconds\n"
 	    "  --check-in-sync                run path checker for in_sync devices\n"
 	    "  --verbose                      increase logging priority\n"
@@ -3046,7 +3047,7 @@ int main(int argc, char *argv[])
 	struct device_monitor *tmp_dev, *found_dev;
 	struct cli_monitor *cli = NULL;
 	struct mdadm_exec *mdx = NULL;
-	unsigned long max_proc, max_files = 4096;
+	unsigned long max_proc, max_files = 4096, pthread_stack_size = 64;
 	struct rlimit cur;
 	char *command_to_send = NULL;
 	char *logfile = NULL;
@@ -3066,6 +3067,7 @@ int main(int argc, char *argv[])
 		{ "log-priority", required_argument, NULL, 'p' },
 		{ "retries", required_argument, NULL, 'r' },
 		{ "syslog", no_argument, NULL, 's' },
+		{ "stack-size", required_argument, NULL, 'S'},
 		{ "check-timeout", required_argument, NULL, 't' },
 		{ "verbose", no_argument, NULL, 'v' },
 		{ "check-in-sync", no_argument, NULL, 'y' },
@@ -3081,7 +3083,7 @@ int main(int argc, char *argv[])
 	logfd = stdout;
 
 	while (1) {
-		option = getopt_long(argc, argv, "c:de:f:mO:o:p:P:r:st:vyhV",
+		option = getopt_long(argc, argv, "c:de:f:mO:o:p:P:r:sS:t:vyhV",
 				     options, NULL);
 		if (option == -1) {
 			break;
@@ -3169,6 +3171,14 @@ int main(int argc, char *argv[])
 		case 's':
 			use_syslog = 1;
 			break;
+		case 'S':
+			pthread_stack_size = strtoul(optarg, NULL, 10);
+			if (pthread_stack_size < 64) {
+				err("Invalid pthread stack size setting '%s'",
+				    optarg);
+				exit(1);
+			}
+			break;
 		case 't':
 			checker_timeout = strtoul(optarg, NULL, 10);
 			if (checker_timeout < 1) {
@@ -3231,8 +3241,8 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	setup_thread_attr(&monitor_attr, 64 * 1024, 1);
-	setup_thread_attr(&cli_attr, 64 * 1024, 0);
+	setup_thread_attr(&monitor_attr, pthread_stack_size * 1024, 1);
+	setup_thread_attr(&cli_attr, pthread_stack_size * 1024, 0);
 
 	pthread_mutex_init(&md_lock, NULL);
 	pthread_mutex_init(&device_lock, NULL);
