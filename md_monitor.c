@@ -2436,7 +2436,7 @@ void *cli_monitor_thread(void *ctx)
 		     event, mdstr, devstr ? devstr : "<NULL>");
 
 		md_dev = lookup_md_alias(mdstr);
-		if (!md_dev) {
+		if (!md_dev && strcmp(event, "NewArray")) {
 			info("%s: skipping event, array not monitored", mdstr);
 			buf[0] = ENODEV;
 			iov.iov_len = 1;
