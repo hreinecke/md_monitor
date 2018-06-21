@@ -2375,10 +2375,15 @@ void *cli_monitor_thread(void *ctx)
 	struct cli_monitor *cli = ctx;
 	struct md_monitor *md_dev = NULL;
 	struct device_monitor *dev = NULL;
+	sigset_t mask;
 
 	cli->running = 1;
 	pthread_cleanup_push(cli_monitor_cleanup, cli);
-
+	sigemptyset(&mask);
+	if (pthread_sigmask(SIG_BLOCK, NULL, &mask)) {
+		info("failed to get current signal mask, err %d", errno);
+		goto out;
+	}
 	while (cli->running) {
 		int fdcount;
 		fd_set readfds;
@@ -2395,7 +2400,8 @@ void *cli_monitor_thread(void *ctx)
 
 		FD_ZERO(&readfds);
 		FD_SET(cli->sock, &readfds);
-		fdcount = select(cli->sock + 1, &readfds, NULL, NULL, NULL);
+		fdcount = pselect(cli->sock + 1, &readfds,
+				  NULL, NULL, NULL, &mask);
 		if (fdcount < 0) {
 			if (errno != EINTR)
 				warn("error receiving message");
@@ -2638,6 +2644,7 @@ void *cli_monitor_thread(void *ctx)
 		if (sendmsg(cli->sock, &smsg, 0) < 0)
 			err("sendmsg failed: %m");
 	}
+ out:
 	info("shutdown cli monitor");
 	pthread_cleanup_pop(1);
 	return ((void *)0);
@@ -3230,14 +3237,14 @@ int main(int argc, char *argv[])
 	info("waiting for events");
 	while (!udev_exit) {
 		int fdcount;
-		struct timeval tmo;
+		struct timespec tmo;
 
 		FD_ZERO(&readfds);
 		FD_SET(monitor_fd, &readfds);
 		tmo.tv_sec = 1;
-		tmo.tv_usec = 0;
-		fdcount = select(monitor_fd + 1, &readfds,
-				 NULL, NULL, &tmo);
+		tmo.tv_nsec = 0;
+		fdcount = pselect(monitor_fd + 1, &readfds,
+				  NULL, NULL, &tmo, &thread_sigmask);
 		if (fdcount < 0) {
 			if (errno != EINTR)
 				warn("error receiving uevent message: %m");
