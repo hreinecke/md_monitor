@@ -1,0 +1,22 @@
+[Unit]
+Description=MD device monitor
+Wants=systemd-udevd.service
+Before=mdmonitor.service 
+After=systemd-udevd.service
+DefaultDependencies=no
+Conflicts=shutdown.target
+
+[Service]
+Type=simple
+# md_monitor needs one task and one file descriptor per disk (DASD).
+TasksMax=65536
+LimitNOFILE=65536
+# Command line options can be overridden in the environment file below
+Environment="MD_MONITOR_ARGS=--expires=5 --retries=2 --check-timeout=1 --fail-mirror"
+EnvironmentFile=-/etc/sysconfig/md_monitor
+ExecStart=/sbin/md_monitor $MD_MONITOR_ARGS
+ExecStop=/sbin/md_monitor --command=Shutdown
+
+[Install]
+WantedBy=sysinit.target
+
