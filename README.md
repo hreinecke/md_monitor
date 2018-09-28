@@ -117,17 +117,15 @@ mdadm --monitor --scan --program <MONITOR_SCRIPT>
 
 where <MONITOR_SCRIPT> is a bash script containing the following:
 
---><--
-#!/bin/bash
-# MD monitor script
-#
-
-EVENT=$1
-MD=$2
-DEV=$3
-
-/sbin/md_monitor -c "${EVENT}:${MD}@${DEV}"
---><--
+    #!/bin/bash
+    # MD monitor script
+    #
+    
+    EVENT=$1
+    MD=$2
+    DEV=$3
+    
+    /sbin/md_monitor -c "${EVENT}:${MD}@${DEV}"
 
 Assuming the md_monitor program has been installed under /sbin.
 The default monitor script is installed under
