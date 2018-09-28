@@ -83,8 +83,31 @@ md_monitor will pick up the changes automatically and start
 monitoring the new device.
 
 
-3) Set-up md_monitor
---------------------
+3) Set-up md_monitor: simple setup with systemd
+-----------------------------------------------
+
+ 1. Make sure the number of system asynchronous IO slots is high enough for
+`md_monitor` (only necessary on SLE12, with kernel below 4.4.155-94.50.1):
+
+        echo "fs.aio-max-nr=$((1<<20))" >/etc/sysctl.d/99-aio.conf
+
+ 2. Set `MDADM_PROGRAM` in `/etc/sysconfig/mdadm`:
+
+        MDADM_PROGRAM="/usr/share/misc/md_notify_device.sh"
+
+ 3. Customize the command line options for `md_monitor` in
+`/etc/sysconfig/md_monitor` to suit your system's needs.
+
+ 4. Enable the `md_monitor` service:
+
+        systemctl enable md_monitor
+
+ 5. Reboot to make sure all settings take effect.
+
+4) Set-up md_monitor: detailed instructions
+-------------------------------------------
+
+Make sure the number of system aio slots is high enough for `md_monitor` (see above).
 
 md_monitor is informed about state changes from MD array either from
 uevents or from mdadm in 'monitor' operation.
@@ -112,7 +135,7 @@ The default monitor script is installed under
 /usr/share/misc/md_notify_device.sh
 
 
-4) md_monitor Documentation
+5) md_monitor Documentation
 ---------------------------
 
 md_monitor has the following command-line options:
