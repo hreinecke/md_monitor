@@ -1,0 +1,12 @@
+## Path:		System/Monitoring
+## Description:		options for the md_monitor daemon (see man md_monitor(8)).
+## ServiceRestart:      md_monitor
+##
+## Type:	string
+## Default:	"--expires=5 --retries=2 --check-timeout=1 --fail-mirror"
+#
+# Command line options for md_monitor, when started via systemd service.
+# Because resources and limits are set by systemd, please avoid using the options
+# --daemonize, --open-file-limit, and --process-limit here.
+#
+MD_MONITOR_ARGS="--expires=5 --retries=2 --check-timeout=1 --fail-mirror"

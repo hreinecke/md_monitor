@@ -1,6 +1,5 @@
 
-Automatic device failover detection with mdadm and md_monitor
-=============================================================
+# Automatic device failover detection with mdadm and md_monitor
 
 Currently, mdadm detects any I/O failure on a device and will be
 setting the affected device(s) to 'faulty'. The MD array is then set
@@ -14,8 +13,7 @@ The MD array then requires manual interaction to resolve this situation.
 2) If the device had a permanent failure it would need to be
    replaced with a spare device.
 
-1) Automatic device integration after temporary failure
---------------------------------------------------------
+## 1) Automatic device integration after temporary failure
 
 The md_monitor program has been developed to handle case 1), ie
 automatic reintegration of a device after a temporary failure.
@@ -51,8 +49,7 @@ c) I/O does not return after a given timeout:
      device as if an I/O error had happened and continue
      as in 1.b)
 
-2) Device replacement after a permanent failure
------------------------------------------------
+## 2) Device replacement after a permanent failure
 
 The md_monitor program continues to issue I/O to a device even if
 the device is failed. On S/390, the DASD subsystem does not allow
@@ -83,8 +80,29 @@ md_monitor will pick up the changes automatically and start
 monitoring the new device.
 
 
-3) Set-up md_monitor
---------------------
+## 3) Set-up md_monitor: simple setup with systemd
+
+ 1. Make sure the number of system asynchronous IO slots is high enough for
+`md_monitor` (only necessary on SLE12, with kernel below 4.4.155-94.50.1):
+
+        echo "fs.aio-max-nr=$((1<<20))" >/etc/sysctl.d/99-aio.conf
+
+ 2. Set `MDADM_PROGRAM` in `/etc/sysconfig/mdadm`:
+
+        MDADM_PROGRAM="/usr/share/misc/md_notify_device.sh"
+
+ 3. Customize the command line options for `md_monitor` in
+`/etc/sysconfig/md_monitor` to suit your system's needs.
+
+ 4. Enable the `md_monitor` service:
+
+        systemctl enable md_monitor
+
+ 5. Reboot to make sure all settings take effect.
+
+## 4) Set-up md_monitor: detailed instructions
+
+Make sure the number of system aio slots is high enough for `md_monitor` (see above).
 
 md_monitor is informed about state changes from MD array either from
 uevents or from mdadm in 'monitor' operation.
@@ -94,17 +112,15 @@ mdadm --monitor --scan --program <MONITOR_SCRIPT>
 
 where <MONITOR_SCRIPT> is a bash script containing the following:
 
---><--
-#!/bin/bash
-# MD monitor script
-#
-
-EVENT=$1
-MD=$2
-DEV=$3
-
-/sbin/md_monitor -c "${EVENT}:${MD}@${DEV}"
---><--
+    #!/bin/bash
+    # MD monitor script
+    #
+    
+    EVENT=$1
+    MD=$2
+    DEV=$3
+    
+    /sbin/md_monitor -c "${EVENT}:${MD}@${DEV}"
 
 Assuming the md_monitor program has been installed under /sbin.
 The default monitor script is installed under
@@ -112,8 +128,7 @@ The default monitor script is installed under
 /usr/share/misc/md_notify_device.sh
 
 
-4) md_monitor Documentation
----------------------------
+## 5) md_monitor Documentation
 
 md_monitor has the following command-line options:
 
