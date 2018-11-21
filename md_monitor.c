@@ -1623,9 +1623,14 @@ static void reset_mirror(struct device_monitor *dev)
 			pthread_mutex_lock(&md_dev->device_lock);
 			memset(nr_devs, 0, sizeof(int) * 2);
 			list_for_each_entry(tmp, &md_dev->children, siblings) {
-				if (tmp->md_slot < 0)
+				int slot;
+
+				pthread_mutex_lock(&tmp->lock);
+				slot = tmp->md_slot;
+				pthread_mutex_unlock(&tmp->lock);
+				if (slot < 0)
 					continue;
-				side = tmp->md_slot % (md_dev->layout & 0xFF);
+				side = slot % (md_dev->layout & 0xFF);
 				nr_devs[side]++;
 			}
 			pthread_mutex_unlock(&md_dev->device_lock);
@@ -1648,18 +1653,24 @@ static void reset_mirror(struct device_monitor *dev)
 	pthread_mutex_lock(&md_dev->device_lock);
 	ready_devices = 0;
 	list_for_each_entry(tmp, &md_dev->children, siblings) {
-		int this_side = tmp->md_slot % (md_dev->layout & 0xFF);
+		int this_side, md_status, io_status;
+
+		pthread_mutex_lock(&tmp->lock);
+		this_side = tmp->md_slot % (md_dev->layout & 0xFF);
+		md_status = tmp->md_status;
+		io_status = tmp->io_status;
+		pthread_mutex_unlock(&tmp->lock);
+
 		dbg("%s: dev %s side %d state %s / %s", md_name, tmp->dev_name,
-		     this_side, md_rdev_print_state(tmp->md_status),
-		     dasd_io_print_state(tmp->io_status));
-		if (tmp->md_status == RECOVERY)
+		     this_side, md_rdev_print_state(md_status),
+		     dasd_io_print_state(io_status));
+		if (md_status == RECOVERY)
 			continue;
-		if (tmp->io_status == IO_UNKNOWN ||
-		    tmp->io_status == IO_FAILED)
+		if (io_status == IO_UNKNOWN || io_status == IO_FAILED)
 			continue;
 		if (this_side != side)
 			ready_devices++;
-		else if (tmp->io_status == IO_OK)
+		else if (io_status == IO_OK)
 			ready_devices++;
 	}
 	pthread_mutex_unlock(&md_dev->device_lock);
