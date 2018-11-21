@@ -629,19 +629,22 @@ static void detach_dasd(struct udev_device *dev)
 	}
 	unlock_device_list();
 	if (found) {
+		struct udev_device *ud;
+		struct md_monitor *md_dev;
+
 		info("%s: Detach %s", found->dev_name,
 		     udev_device_get_devpath(found->device));
-		if (!list_empty(&found->siblings)) {
-			struct md_monitor *md_dev;
 
-			md_dev = lookup_md(found->parent, 0);
-			if (md_dev) {
-				remove_md_component(md_dev, found);
-				pthread_mutex_lock(&md_dev->device_lock);
-				list_del_init(&found->siblings);
-				pthread_mutex_unlock(&md_dev->device_lock);
-				remove_component(found);
-			}
+		pthread_mutex_lock(&found->lock);
+		ud = found->parent;
+		pthread_mutex_unlock(&found->lock);
+		md_dev = lookup_md(ud, 0);
+		if (md_dev && !list_empty(&found->siblings)) {
+			remove_md_component(md_dev, found);
+			pthread_mutex_lock(&md_dev->device_lock);
+			list_del_init(&found->siblings);
+			pthread_mutex_unlock(&md_dev->device_lock);
+			remove_component(found);
 		}
 		dasd_monitor_put(found);
 	} else {
