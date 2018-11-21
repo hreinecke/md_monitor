@@ -786,8 +786,11 @@ enum md_rdev_status md_rdev_check_state(struct device_monitor *dev)
 	 * to -1, leaving us with no idea where the
 	 * device was originally located at.
 	 */
-	if (md_status != TIMEOUT && md_status != FAULTY)
+	if (md_status != TIMEOUT && md_status != FAULTY) {
+		pthread_mutex_lock(&dev->lock);
 		dev->md_slot = info.raid_disk;
+		pthread_mutex_unlock(&dev->lock);
+	}
 	info("%s: MD rdev (%d/%d) state %s (%x)",
 	     dev->dev_name, dev->md_index, dev->md_slot,
 	     md_rdev_print_state(md_status), info.state);
@@ -795,6 +798,7 @@ enum md_rdev_status md_rdev_check_state(struct device_monitor *dev)
 	return md_status;
 }
 
+/* Call with dev->lock held */
 enum md_rdev_status md_rdev_update_state(struct device_monitor *dev,
 					 enum md_rdev_status md_status)
 {
