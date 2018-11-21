@@ -385,6 +385,7 @@ static struct device_monitor * lookup_md_component(struct md_monitor *md_dev,
 	pthread_mutex_unlock(&md_dev->status_lock);
 	pthread_mutex_lock(&md_dev->device_lock);
 	list_for_each_entry(tmp, &md_dev->children, siblings) {
+		/* No locking required, tmp->device is static */
 		if (lookup_symlinks) {
 			struct udev_list_entry *entry;
 			const char *tmpname, *ptr;
@@ -405,11 +406,14 @@ static struct device_monitor * lookup_md_component(struct md_monitor *md_dev,
 				}
 			}
 		} else {
+			pthread_mutex_lock(&tmp->lock);
 			if (!strncmp(devname, tmp->md_name,
 				     strlen(tmp->md_name))) {
 				found = tmp;
+				pthread_mutex_unlock(&tmp->lock);
 				break;
-			}
+			} else
+				pthread_mutex_unlock(&tmp->lock);
 		}
 	}
 out:
