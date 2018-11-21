@@ -1541,9 +1541,14 @@ static void fail_mirror(struct device_monitor *dev, enum md_rdev_status status)
 		memset(nr_devs, 0, sizeof(int) * 2);
 		/* Try to figure out which side to fail */
 		list_for_each_entry(tmp, &md_dev->children, siblings) {
-			if (tmp->md_slot < 0)
+			int slot;
+
+			pthread_mutex_lock(&dev->lock);
+			slot = tmp->md_slot;
+			pthread_mutex_unlock(&dev->lock);
+			if (slot < 0)
 				continue;
-			side = tmp->md_slot % (md_dev->layout & 0xFF);
+			side = slot % (md_dev->layout & 0xFF);
 			nr_devs[side]++;
 		}
 		pthread_mutex_unlock(&md_dev->device_lock);
