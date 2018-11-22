@@ -112,6 +112,9 @@ struct md_monitor {
 	int in_recovery;
 	int degraded;
 	int in_discovery;
+	pthread_t reset_thread;
+	pthread_mutex_t reset_lock;
+	int reset_count;
 };
 
 struct device_monitor {
@@ -461,6 +464,7 @@ static struct md_monitor *lookup_md_new(struct udev_device *md_dev)
 		INIT_LIST_HEAD(&md->pending);
 		pthread_mutex_init(&md->status_lock, NULL);
 		pthread_mutex_init(&md->device_lock, NULL);
+		pthread_mutex_init(&md->reset_lock, NULL);
 		list_add(&md->entry, &md_list);
 	}
 out_unlock:
@@ -1983,6 +1987,31 @@ static void discover_md_components(struct md_monitor *md)
 	close(ioctl_fd);
 }
 
+static void kill_reset_thread(struct md_monitor *md_dev, int is_error)
+{
+	pthread_t thread;
+	void *dummy;
+	const char *md_name;
+
+	pthread_mutex_lock(&md_dev->reset_lock);
+	thread = md_dev->reset_thread;
+	pthread_mutex_unlock(&md_dev->reset_lock);
+
+	if (thread == 0)
+		return;
+
+	pthread_cancel(thread);
+
+	md_name = udev_device_get_sysname(md_dev->device);
+	if (is_error)
+		err("%s: ERROR: reset thread killed", md_name);
+	else
+		dbg("%s: reset thread killed", md_name);
+
+	pthread_join(md_dev->reset_thread, &dummy);
+}
+
+
 static void fail_md(struct md_monitor *md_dev)
 {
 	const char *md_name = udev_device_get_sysname(md_dev->device);
@@ -2022,6 +2051,7 @@ static void fail_md(struct md_monitor *md_dev)
 		pthread_mutex_unlock(&md_dev->status_lock);
 	}
 
+	kill_reset_thread(md_dev, 0);
 	sprintf(cmdline, "mdadm --manage /dev/%s --fail set-%c", md_name,
 		(pending_side >> 1) ? 'B' : 'A' );
 	dbg("%s: call 'system' '%s'", md_name, cmdline);
@@ -2047,6 +2077,58 @@ static void fail_md(struct md_monitor *md_dev)
 		md_dev->pending_status = UNKNOWN;
 		pthread_mutex_unlock(&md_dev->status_lock);
 	}
+}
+
+static void cleanup_reset_thread(void *arg)
+{
+	struct md_monitor *md_dev = arg;
+
+	pthread_mutex_lock(&md_dev->reset_lock);
+	md_dev->reset_thread = 0;
+	pthread_mutex_unlock(&md_dev->reset_lock);
+}
+
+static const int MAX_RESET_COUNT = 5;
+
+static void *reset_thread(void *arg)
+{
+	struct md_monitor *md_dev = arg;
+	struct timespec ts = { .tv_sec = 1 };
+	struct timespec rem;
+	const char *md_name;
+	int count, side, ready_devices;
+
+	pthread_cleanup_push(cleanup_reset_thread, md_dev);
+	md_name = udev_device_get_sysname(md_dev->device);
+
+	while (nanosleep(&ts, &rem) == -1 && errno == EINTR)
+		ts = rem;
+
+	pthread_mutex_lock(&md_dev->status_lock);
+	side = md_dev->pending_side >> 1;
+	pthread_mutex_unlock(&md_dev->status_lock);
+
+	ready_devices = count_ready_devices(md_dev, md_name, side);
+	if (ready_devices != md_dev->raid_disks) {
+		info("%s: not enough devices to reset (%d/%d), reset thread terminates",
+		     md_name, ready_devices, md_dev->raid_disks);
+		pthread_mutex_lock(&md_dev->status_lock);
+		md_dev->degraded = 0;
+		md_dev->pending_side = 0;
+		md_dev->pending_status = UNKNOWN;
+		pthread_mutex_unlock(&md_dev->status_lock);
+	} else {
+		pthread_mutex_lock(&pending_lock);
+		list_add(&md_dev->pending, &pending_list);
+		count = ++md_dev->reset_count;
+		pthread_cond_signal(&pending_cond);
+		pthread_mutex_unlock(&pending_lock);
+		info("%s: retrying array reset, count %d", md_name, count);
+	}
+
+	pthread_cleanup_pop(1);
+
+	return NULL;
 }
 
 static void reset_md(struct md_monitor *md_dev)
@@ -2080,7 +2162,34 @@ static void reset_md(struct md_monitor *md_dev)
 	if (rc) {
 		warn("%s: cannot reset mirror, error %d",
 		     md_name, rc);
+		/*
+		 * Reset pending_status anyway.
+		 * This may be a temporary failure.
+		 */
+		kill_reset_thread(md_dev, 1);
+		pthread_mutex_lock(&md_dev->reset_lock);
+		if (md_dev->reset_count < MAX_RESET_COUNT) {
+			if (pthread_create(&md_dev->reset_thread, NULL,
+					   reset_thread, md_dev) == 0) {
+				pthread_mutex_unlock(&md_dev->reset_lock);
+				dbg("%s: reset thread started");
+				return;
+			} else {
+				md_dev->reset_thread = 0;
+				err("%s: Failed to start reset thread (%s)",
+				    md_name, strerror(errno));
+			}
+		} else
+			err("%s: reset thread retries exhausted", md_name);
+		pthread_mutex_unlock(&md_dev->reset_lock);
+		pthread_mutex_lock(&md_dev->status_lock);
+		md_dev->pending_side = 0;
+		md_dev->pending_status = UNKNOWN;
+		pthread_mutex_unlock(&md_dev->status_lock);
 	} else {
+		pthread_mutex_lock(&md_dev->reset_lock);
+		md_dev->reset_count = 0;
+		pthread_mutex_unlock(&md_dev->reset_lock);
 		pthread_mutex_lock(&md_dev->status_lock);
 		md_dev->degraded = 0;
 		md_dev->pending_side = 0;
@@ -2095,6 +2204,7 @@ static void remove_md(struct md_monitor *md_dev)
 	struct device_monitor *dev, *tmp;
 	struct list_head remove_list;
 
+	kill_reset_thread(md_dev, 0);
 	INIT_LIST_HEAD(&remove_list);
 	pthread_mutex_lock(&md_dev->device_lock);
 	list_splice_init(&md_dev->children, &remove_list);
@@ -2117,6 +2227,7 @@ static void remove_md(struct md_monitor *md_dev)
 	pthread_mutex_unlock(&md_dev->status_lock);
 	pthread_mutex_destroy(&md_dev->status_lock);
 	pthread_mutex_destroy(&md_dev->device_lock);
+	pthread_mutex_destroy(&md_dev->reset_lock);
 	free(md_dev);
 }
 
