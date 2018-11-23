@@ -2204,7 +2204,9 @@ static int display_md_status(struct md_monitor *md_dev, char *buf, int buflen)
 	memset(buf, '.', buflen - 1);
 	pthread_mutex_lock(&md_dev->device_lock);
 	list_for_each_entry(dev, &md_dev->children, siblings) {
+		pthread_mutex_lock(&dev->lock);
 		slot = dev->md_slot;
+		pthread_mutex_unlock(&dev->lock);
 		if (slot < 0)
 			continue;
 		if (slot >= max_slot)
@@ -2241,7 +2243,9 @@ static int display_io_status(struct md_monitor *md_dev, char *buf, int buflen)
 
 	pthread_mutex_lock(&md_dev->device_lock);
 	list_for_each_entry(dev, &md_dev->children, siblings) {
+		pthread_mutex_lock(&dev->lock);
 		slot = dev->md_slot;
+		pthread_mutex_unlock(&dev->lock);
 		if (slot < 0)
 			continue;
 		if (slot >= max_slot)
