@@ -1625,6 +1625,38 @@ static void fail_mirror(struct device_monitor *dev, enum md_rdev_status status)
 
 }
 
+int count_ready_devices(struct md_monitor *md_dev, const char *md_name,
+			int side)
+{
+	struct device_monitor *tmp;
+	int ready_devices = 0;
+
+	pthread_mutex_lock(&md_dev->device_lock);
+	list_for_each_entry(tmp, &md_dev->children, siblings) {
+		int this_side, md_status, io_status;
+
+		pthread_mutex_lock(&tmp->lock);
+		this_side = tmp->md_slot % (md_dev->layout & 0xFF);
+		md_status = tmp->md_status;
+		io_status = tmp->io_status;
+		pthread_mutex_unlock(&tmp->lock);
+
+		dbg("%s: dev %s side %d state %s / %s", md_name, tmp->dev_name,
+		     this_side, md_rdev_print_state(md_status),
+		     dasd_io_print_state(io_status));
+		if (md_status == RECOVERY)
+			continue;
+		if (io_status == IO_UNKNOWN || io_status == IO_FAILED)
+			continue;
+		if (this_side != side)
+			ready_devices++;
+		else if (io_status == IO_OK)
+			ready_devices++;
+	}
+	pthread_mutex_unlock(&md_dev->device_lock);
+	return ready_devices;
+}
+
 static void reset_mirror(struct device_monitor *dev)
 {
 	struct md_monitor *md_dev;
@@ -1692,31 +1724,8 @@ static void reset_mirror(struct device_monitor *dev)
 	}
 
 	info("%s: reset mirror side %d", md_name, side);
-	pthread_mutex_lock(&md_dev->device_lock);
-	ready_devices = 0;
-	list_for_each_entry(tmp, &md_dev->children, siblings) {
-		int this_side, md_status, io_status;
-
-		pthread_mutex_lock(&tmp->lock);
-		this_side = tmp->md_slot % (md_dev->layout & 0xFF);
-		md_status = tmp->md_status;
-		io_status = tmp->io_status;
-		pthread_mutex_unlock(&tmp->lock);
-
-		dbg("%s: dev %s side %d state %s / %s", md_name, tmp->dev_name,
-		     this_side, md_rdev_print_state(md_status),
-		     dasd_io_print_state(io_status));
-		if (md_status == RECOVERY)
-			continue;
-		if (io_status == IO_UNKNOWN || io_status == IO_FAILED)
-			continue;
-		if (this_side != side)
-			ready_devices++;
-		else if (io_status == IO_OK)
-			ready_devices++;
-	}
-	pthread_mutex_unlock(&md_dev->device_lock);
 	/* Not enough devices, don't reset mirror side */
+	ready_devices = count_ready_devices(md_dev, md_name, side);
 	if (ready_devices != md_dev->raid_disks) {
 		info("%s: not enough devices to reset (%d/%d)", md_name,
 		     ready_devices, md_dev->raid_disks);
