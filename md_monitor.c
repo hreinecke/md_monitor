@@ -1095,6 +1095,12 @@ static enum dasd_io_status dasd_check_aio(struct device_monitor *dev,
 			dev->aio_active = 0;
 			io_status = IO_ERROR;
 		} else {
+			rc = io_cancel(dev->ioctx, ios[0], &event);
+			if (rc < 0) {
+				warn("%s: io_cancel returned %d",
+				     dev->dev_name, rc);
+			}
+			dev->aio_active = 0;
 			info("%s: io_getevents interrupted", dev->dev_name);
 			io_status = IO_PENDING;
 		}
