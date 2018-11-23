@@ -1906,7 +1906,7 @@ static void fail_md(struct md_monitor *md_dev)
 		warn("%s: no pending side", md_name);
 		return;
 	}
-	if (md_dev->degraded & (1 << md_dev->pending_side)) {
+	if (md_dev->degraded & md_dev->pending_side) {
 		info("%s: mirror side %d already failed", md_name,
 		     (md_dev->pending_side >> 1));
 		pthread_mutex_unlock(&md_dev->status_lock);
