@@ -503,6 +503,7 @@ static struct device_monitor *allocate_dasd(struct udev_device *dasd_dev)
 {
 	struct device_monitor *dev;
 	const char *devname;
+	pthread_condattr_t condattr;
 
 	devname = udev_device_get_sysname(dasd_dev);
 	if (strlen(devname) > MD_NAMELEN) {
@@ -521,7 +522,10 @@ static struct device_monitor *allocate_dasd(struct udev_device *dasd_dev)
 	dev->md_index = -1;
 	dev->io_status = IO_UNKNOWN;
 	pthread_mutex_init(&dev->lock, NULL);
-	pthread_cond_init(&dev->io_cond, NULL);
+	pthread_condattr_init(&condattr);
+	pthread_condattr_setclock(&condattr, CLOCK_REALTIME);
+	pthread_cond_init(&dev->io_cond, &condattr);
+	pthread_condattr_destroy(&condattr);
 	INIT_LIST_HEAD(&dev->siblings);
 	udev_device_ref(dev->device);
 	strcpy(dev->dev_name, devname);
@@ -1475,7 +1479,21 @@ static int fail_component(struct device_monitor *dev,
 
 static int reset_component(struct device_monitor *dev)
 {
+	struct timespec tp;
+	const unsigned long billion = 1000*1000*1000UL;
+	const unsigned long status_wait_ns = billion / 100;
+
+	clock_gettime(CLOCK_REALTIME, &tp);
+	tp.tv_nsec += status_wait_ns;
+	if (tp.tv_nsec > billion) {
+		tp.tv_sec += tp.tv_nsec / billion;
+		tp.tv_sec %= billion;
+	}
+
 	pthread_mutex_lock(&dev->lock);
+	if (dev->ioctx && dev->io_status == IO_UNKNOWN)
+		pthread_cond_timedwait(&dev->io_cond, &dev->lock, &tp);
+
 	if (dev->io_status != IO_OK) {
 		info("%s: I/O status %s, do not reset device", dev->dev_name,
 		     dasd_io_print_state(dev->io_status));
@@ -1756,8 +1774,12 @@ static void fail_md_component(struct md_monitor *md_dev,
 		dev->io_status = IO_TIMEOUT;
 	else if (new_status == FAULTY)
 		dev->io_status = IO_FAILED;
-	else
-		dev->io_status = IO_OK;
+	else if (new_status == IN_SYNC) {
+		dev->io_status = IO_UNKNOWN;
+		if (dev->thread)
+			pthread_kill(dev->thread, SIGHUP);
+	} else
+		dev->io_status = IO_UNKNOWN;
 	pthread_mutex_unlock(&dev->lock);
 	if (new_status != IN_SYNC)
 		fail_mirror(dev, new_status);
