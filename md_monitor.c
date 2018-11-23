@@ -600,7 +600,9 @@ static void attach_dasd(struct udev_device *dev)
 	}
 	unlock_device_list();
 	if (found_md) {
+		pthread_mutex_lock(&found->lock);
 		add_component(found_md, found, devname);
+		pthread_mutex_unlock(&found->lock);
 		pthread_mutex_lock(&found_md->device_lock);
 		if (list_empty(&found->siblings))
 			list_add(&found->siblings, &found_md->children);
@@ -1908,6 +1910,7 @@ static void discover_md_components(struct md_monitor *md)
 				continue;
 			}
 		}
+		pthread_mutex_lock(&found->lock);
 		found->md_index = i;
 		found->md_slot = info.raid_disk;
 		udev = udev_device_get_udev(md->device);
@@ -1915,6 +1918,7 @@ static void discover_md_components(struct md_monitor *md)
 		info("%s: Start monitoring %s", mdname,
 		     udev_device_get_sysname(raid_dev));
 		add_component(md, found, udev_device_get_sysname(raid_dev));
+		pthread_mutex_unlock(&found->lock);
 		udev_device_unref(raid_dev);
 		list_add(&found->siblings, &md->children);
 		monitor_dasd(found);
