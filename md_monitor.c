@@ -730,7 +730,6 @@ static void md_rdev_update_index(struct md_monitor *md,
 				dev->md_side = dev->md_slot % (md->layout & 0xFF);
 			info("%s: update index on %s (%d/%d)", md->dev_name,
 			     dev->md_name, dev->md_index, dev->md_slot);
-			monitor_dasd(dev);
 			break;
 		}
 	}
