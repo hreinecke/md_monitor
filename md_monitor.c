@@ -736,7 +736,7 @@ static void md_rdev_update_index(struct md_monitor *md,
 	close(ioctl_fd);
 }
 
-enum md_rdev_status md_rdev_check_state(struct device_monitor *dev)
+enum md_rdev_status md_rdev_check_state(struct device_monitor *dev, int *md_slot)
 {
 	int ioctl_fd;
 	char attrpath[256];
@@ -777,24 +777,20 @@ enum md_rdev_status md_rdev_check_state(struct device_monitor *dev)
 	else
 		md_status = SPARE;
 
-	/*
-	 * TIMEOUT and FAULTY will set the slot number
-	 * to -1, leaving us with no idea where the
-	 * device was originally located at.
-	 */
-	if (md_status != TIMEOUT && md_status != FAULTY)
-		dev->md_slot = info.raid_disk;
-	info("%s: MD rdev (%d/%d) state %s (%x)",
+	*md_slot = info.raid_disk;
+	info("%s: MD rdev (%d/%d) state %s (%x) slot %d",
 	     dev->dev_name, dev->md_index, dev->md_slot,
-	     md_rdev_print_state(md_status), info.state);
+	     md_rdev_print_state(md_status), info.state,
+	     *md_slot);
 
 	return md_status;
 }
 
 enum md_rdev_status md_rdev_update_state(struct device_monitor *dev,
-					 enum md_rdev_status md_status)
+					 enum md_rdev_status md_status, int md_slot)
 {
 	enum md_rdev_status old_status = dev->md_status;
+	int old_slot = dev->md_slot;
 
 	switch (old_status) {
 	case PENDING:
@@ -834,7 +830,11 @@ enum md_rdev_status md_rdev_update_state(struct device_monitor *dev,
 		info("%s: md state update from %s to %s", dev->dev_name,
 		     md_rdev_print_state(old_status),
 		     md_rdev_print_state(dev->md_status));
-
+	if (md_slot != old_slot) {
+		dev->md_slot = md_slot;
+		info("%s: md slot number update from %d to %d",
+		     dev->dev_name, old_slot, dev->md_slot);
+	}
 	return md_status;
 }
 
@@ -1199,8 +1199,10 @@ void *dasd_monitor_thread (void *ctx)
 			break;
 		}
 		if (io_status != IO_TIMEOUT) {
+			int md_slot = -1;
+
 			/* Re-check; status might have been changed during aio */
-			md_status = md_rdev_check_state(dev);
+			md_status = md_rdev_check_state(dev, &md_slot);
 			if (md_status == UNKNOWN) {
 				/* array has been stopped */
 				pthread_mutex_lock(&dev->lock);
@@ -1209,7 +1211,7 @@ void *dasd_monitor_thread (void *ctx)
 
 			/* Write status back */
 			pthread_mutex_lock(&dev->lock);
-			new_status = md_rdev_update_state(dev, md_status);
+			new_status = md_rdev_update_state(dev, md_status, md_slot);
 		} else {
 			pthread_mutex_lock(&dev->lock);
 			new_status = TIMEOUT;
@@ -1396,6 +1398,7 @@ static void add_component(struct md_monitor *md, struct device_monitor *dev,
 	if (md_namelen > MD_NAMELEN)
 		md_namelen = MD_NAMELEN;
 
+	pthread_mutex_lock(&dev->lock);
 	info("%s: Add component (%d/%d)", dev->dev_name,
 	     dev->md_index, dev->md_slot);
 	if (!dev->parent) {
@@ -1406,6 +1409,7 @@ static void add_component(struct md_monitor *md, struct device_monitor *dev,
 	dev->md_name[MD_NAMELEN - 1] = '\0';
 	if (dev->md_index < 0)
 		md_rdev_update_index(md, dev);
+	pthread_mutex_unlock(&dev->lock);
 	dasd_set_attribute(dev, "failfast", 1);
 	dasd_set_attribute(dev, "failfast_retries", failfast_retries);
 	dasd_set_attribute(dev, "failfast_expires", failfast_timeout);
@@ -1426,14 +1430,15 @@ static void remove_component(struct device_monitor *dev)
 static int fail_component(struct device_monitor *dev,
 			  enum md_rdev_status new_status)
 {
-	enum md_rdev_status md_status;
-	int rc = 0;
+	enum md_rdev_status md_status, old_status;
+	int rc = 0, md_slot = -1;
 	pthread_t thread;
 
 	/* Check state if we need to do anything here */
-	dev->md_status = md_rdev_check_state(dev);
+	old_status = md_rdev_check_state(dev, &md_slot);
 	pthread_mutex_lock(&dev->lock);
-	md_status = md_rdev_update_state(dev, new_status);
+	dev->md_status = old_status;
+	md_status = md_rdev_update_state(dev, new_status, md_slot);
 	if (md_status == new_status) {
 		pthread_mutex_unlock(&dev->lock);
 		info("%s: already in state '%s'",
@@ -1633,6 +1638,7 @@ static void fail_md_component(struct md_monitor *md_dev,
 			      struct device_monitor *dev)
 {
 	enum md_rdev_status md_status, new_status;
+	int md_slot = -1;
 
 	/*
 	 * Fail does not necessarily indicate the device has gone,
@@ -1641,7 +1647,7 @@ static void fail_md_component(struct md_monitor *md_dev,
 	info("%s: fail component in state %s", dev->dev_name,
 	     md_rdev_print_state(dev->md_status));
 
-	md_status = md_rdev_check_state(dev);
+	md_status = md_rdev_check_state(dev, &md_slot);
 	if (md_status == UNKNOWN ||
 	    md_status == RECOVERY ||
 	    md_status == SPARE ||
@@ -1663,7 +1669,7 @@ static void fail_md_component(struct md_monitor *md_dev,
 	} else if (md_status != TIMEOUT)
 		md_status = FAULTY;
 	pthread_mutex_lock(&dev->lock);
-	new_status = md_rdev_update_state(dev, md_status);
+	new_status = md_rdev_update_state(dev, md_status, md_slot);
 	if (new_status == TIMEOUT)
 		dev->io_status = IO_TIMEOUT;
 	else if (new_status == FAULTY)
@@ -1791,6 +1797,7 @@ static void discover_md_components(struct md_monitor *md)
 			}
 		}
 		if (found) {
+			pthread_mutex_lock(&found->lock);
 			if (!found->parent)
 				found->parent = md->device;
 
@@ -1799,6 +1806,7 @@ static void discover_md_components(struct md_monitor *md)
 			/* Be on the safe side and update indices */
 			found->md_index = i;
 			found->md_slot = info.raid_disk;
+			pthread_mutex_unlock(&found->lock);
 			list_move(&found->siblings, &md->children);
 			monitor_dasd(found);
 			found = NULL;
@@ -1828,9 +1836,11 @@ static void discover_md_components(struct md_monitor *md)
 				continue;
 			}
 		}
+		pthread_mutex_lock(&found->lock);
 		found->md_index = i;
 		found->md_slot = info.raid_disk;
 		found->md_side = found->md_slot % (md->layout & 0xFF);
+		pthread_mutex_unlock(&found->lock);
 		udev = udev_device_get_udev(md->device);
 		raid_dev = udev_device_new_from_devnum(udev, 'b', raid_devt);
 		info("%s: Start monitoring %s", mdname,
@@ -2199,17 +2209,18 @@ static int display_md(struct md_monitor *md_dev, char *buf)
 	buf[0] = '\0';
 	list_for_each_entry(dev, &md_dev->children, siblings) {
 		enum md_rdev_status md_status;
+		int md_slot = -1;
 
-		md_status = md_rdev_check_state(dev);
+		md_status = md_rdev_check_state(dev, &md_slot);
 		pthread_mutex_lock(&dev->lock);
-		md_rdev_update_state(dev, md_status);
+		md_rdev_update_state(dev, md_status, md_slot);
 		while (dev->ioctx && dev->io_status == IO_UNKNOWN)
 			pthread_cond_wait(&dev->io_cond, &dev->lock);
 
 		pthread_mutex_unlock(&dev->lock);
 		len = sprintf(status, "%s: dev %s slot %d/%d status %s %s\n",
 			      md_dev->dev_name, dev->dev_name,
-			      dev->md_slot, md_dev->raid_disks,
+			      md_slot, md_dev->raid_disks,
 			      md_rdev_print_state(dev->md_status),
 			      dasd_io_print_state(dev->io_status));
 		if ((bufsize + len) > CLI_BUFLEN) {
