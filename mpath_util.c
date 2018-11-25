@@ -343,7 +343,7 @@ void *mpath_status_thread (void *ctx)
 	char *reply = NULL, *ptr, *eptr;
 	char *devname = NULL;
 	unsigned long num_paths;
-	int rc;
+	int rc, md_slot;
 
 	while (1) {
 		len = mpath_status(&reply, mpath_timeout);
@@ -416,14 +416,14 @@ void *mpath_status_thread (void *ctx)
 				continue;
 			}
 			warn("%s: update status", devname);
-			md_status = md_rdev_check_state(dev);
+			md_status = md_rdev_check_state(dev, &md_slot);
 			if (md_status == UNKNOWN) {
 				/* array has been stopped */
 				continue;
 			}
 			/* Write status back */
 			pthread_mutex_lock(&dev->lock);
-			new_status = md_rdev_update_state(dev, md_status);
+			new_status = md_rdev_update_state(dev, md_status, md_slot);
 			dev->io_status = io_status;
 			pthread_cond_signal(&dev->io_cond);
 			pthread_mutex_unlock(&dev->lock);
