@@ -1410,19 +1410,25 @@ static void reset_mirror(struct device_monitor *dev)
 	pthread_mutex_lock(&md_dev->device_lock);
 	ready_devices = 0;
 	list_for_each_entry(tmp, &md_dev->children, siblings) {
-		dbg("%s: dev %s side %d state %s / %s", md_name, tmp->dev_name,
+		pthread_mutex_lock(&tmp->lock);
+		dbg("%s: dev %s side %d state %s / %s slot %d", md_name, tmp->dev_name,
 		     tmp->md_side, md_rdev_print_state(tmp->md_status),
 		     device_io_print_state(tmp->io_status));
-		if (tmp->md_status == RECOVERY)
+		if (tmp->md_status == RECOVERY) {
+			pthread_mutex_unlock(&tmp->lock);
 			continue;
+		}
 		if (tmp->io_status == IO_UNKNOWN ||
 		    tmp->io_status == IO_FAILED ||
-		    tmp->io_status == IO_RETRY)
+		    tmp->io_status == IO_RETRY) {
+			pthread_mutex_unlock(&tmp->lock);
 			continue;
+		}
 		if (tmp->md_side != dev->md_side)
 			ready_devices++;
-		else if (tmp->io_status == IO_OK)
+		else if (tmp->io_status == IO_OK && tmp->md_slot < 0)
 			ready_devices++;
+		pthread_mutex_unlock(&tmp->lock);
 	}
 	pthread_mutex_unlock(&md_dev->device_lock);
 	/* Not enough devices, don't reset mirror side */
