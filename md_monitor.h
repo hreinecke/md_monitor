@@ -93,6 +93,7 @@ struct device_monitor {
 	int ref;
 	int md_index;
 	int md_slot;
+	int md_side;
 	int fd;
 	int running;
 	int aio_active;
