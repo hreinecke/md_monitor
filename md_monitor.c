@@ -1623,6 +1623,9 @@ static void reset_mirror(struct device_monitor *dev)
 	pthread_mutex_lock(&md_dev->device_lock);
 	ready_devices = 0;
 	list_for_each_entry(tmp, &md_dev->children, siblings) {
+		int recheck = 0;
+		pthread_t thread;
+
 		pthread_mutex_lock(&tmp->lock);
 		dbg("%s: dev %s side %d state %s / %s slot %d", md_name, tmp->dev_name,
 		     tmp->md_side, md_rdev_print_state(tmp->md_status),
@@ -1638,9 +1641,23 @@ static void reset_mirror(struct device_monitor *dev)
 		}
 		if (tmp->md_side != dev->md_side)
 			ready_devices++;
-		else if (tmp->io_status == IO_OK && tmp->md_slot < 0)
-			ready_devices++;
+		else if (tmp->io_status == IO_OK) {
+			if (tmp->md_slot >= 0) {
+				/* Notify monitor thread to re-check */
+				if (tmp->running && tmp->thread) {
+					thread = tmp->thread;
+					recheck = 1;
+				}
+			}
+			if (tmp->md_slot < 0)
+				ready_devices++;
+		}
 		pthread_mutex_unlock(&tmp->lock);
+		if (recheck) {
+			info("%s: notify monitor thread to recheck slot",
+			     tmp->dev_name);
+			pthread_kill(thread, SIGHUP);
+		}
 	}
 	pthread_mutex_unlock(&md_dev->device_lock);
 	/* Not enough devices, don't reset mirror side */
