@@ -685,7 +685,7 @@ static void md_rdev_update_index(struct md_monitor *md,
 {
 	int ioctl_fd, i, offset = 0;
 	mdu_disk_info_t info;
-	char mdpath[256];
+	char mdpath[261];
 	dev_t mon_devt, tmp_devt;
 
 	if (!md) {
@@ -987,7 +987,7 @@ remove:
 static int dasd_setup_aio(struct device_monitor *dev)
 {
 	const char *devnode;
-	char devnode_s[256];
+	char devnode_s[261];
 	int rc, flags;
 
 	devnode = udev_device_get_devnode(dev->device);
@@ -1785,7 +1785,7 @@ static void discover_md_components(struct md_monitor *md)
 	int ioctl_fd, i, offset = 0;
 	mdu_disk_info_t info;
 	struct device_monitor *tmp, *found = NULL;
-	char mdpath[256];
+	char mdpath[261];
 	dev_t raid_devt, mon_devt, tmp_devt;
 	struct udev *udev;
 	struct udev_device *raid_dev;
@@ -2064,7 +2064,7 @@ static void remove_md(struct md_monitor *md_dev)
 
 static int check_md(struct md_monitor *md_dev, mdu_array_info_t *info)
 {
-	char devpath[256];
+	char devpath[261];
 	int ioctl_fd, rc = 0;
 
 	if (!md_dev)
