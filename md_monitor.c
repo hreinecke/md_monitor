@@ -477,7 +477,7 @@ static struct device_monitor *allocate_device(struct udev_device *udev_dev)
 	memset(dev, 0, sizeof(struct device_monitor));
 	dev->device = udev_dev;
 	dev->ref = 1;
-	dev->md_slot = -1;
+	dev->md_slot = dev->md_slot_saved = -1;
 	dev->md_index = -1;
 	dev->md_side = -1;
 	dev->io_status = IO_UNKNOWN;
@@ -726,8 +726,11 @@ static void md_rdev_update_index(struct md_monitor *md,
 				dev->parent = md->device;
 
 			dev->md_index = i;
-			if (info.raid_disk > -1)
+			if (info.raid_disk > -1) {
 				dev->md_slot = info.raid_disk;
+				if (dev->md_slot_saved < 0 && dev->md_slot >= 0)
+					dev->md_slot_saved = dev->md_slot;
+			}
 			if (dev->md_side < 0)
 				dev->md_side = dev->md_slot % (md->layout & 0xFF);
 			info("%s: update index on %s (%d/%d)", md->dev_name,
@@ -847,6 +850,8 @@ enum md_rdev_status md_rdev_update_state(struct device_monitor *dev,
 		     md_rdev_print_state(dev->md_status));
 	if (md_slot != old_slot) {
 		dev->md_slot = md_slot;
+		if (dev->md_slot_saved < 0 && dev->md_slot >= 0)
+			dev->md_slot_saved = dev->md_slot;
 		info("%s: md slot number update from %d to %d",
 		     dev->dev_name, old_slot, dev->md_slot);
 	}
@@ -1656,6 +1661,8 @@ static void discover_md_components(struct md_monitor *md)
 			/* Be on the safe side and update indices */
 			found->md_index = i;
 			found->md_slot = info.raid_disk;
+			if (found->md_slot_saved < 0 && found->md_slot >= 0)
+				found->md_slot_saved = found->md_slot;
 			pthread_mutex_unlock(&found->lock);
 			list_move(&found->siblings, &md->children);
 			monitor_device(found);
@@ -1691,6 +1698,8 @@ static void discover_md_components(struct md_monitor *md)
 		pthread_mutex_lock(&found->lock);
 		found->md_index = i;
 		found->md_slot = info.raid_disk;
+		if (found->md_slot_saved < 0 && found->md_slot >= 0)
+			found->md_slot_saved = found->md_slot;
 		found->md_side = found->md_slot % (md->layout & 0xFF);
 		pthread_mutex_unlock(&found->lock);
 		sysname = udev_device_get_sysname(raid_dev);
@@ -2018,7 +2027,7 @@ static int display_md_status(struct md_monitor *md_dev, char *buf, int buflen)
 	memset(buf, '.', buflen - 1);
 	pthread_mutex_lock(&md_dev->device_lock);
 	list_for_each_entry(dev, &md_dev->children, siblings) {
-		slot = dev->md_slot;
+		slot = dev->md_slot_saved;
 		if (slot < 0)
 			continue;
 		if (slot >= max_slot)
@@ -2057,7 +2066,7 @@ static int display_io_status(struct md_monitor *md_dev, char *buf, int buflen)
 
 	pthread_mutex_lock(&md_dev->device_lock);
 	list_for_each_entry(dev, &md_dev->children, siblings) {
-		slot = dev->md_slot;
+		slot = dev->md_slot_saved;
 		if (slot < 0)
 			continue;
 		if (slot >= max_slot)
