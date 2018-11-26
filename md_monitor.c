@@ -228,9 +228,8 @@ void sig_handler(int signum)
 	}
 }
 
-static struct md_monitor *lookup_md(struct udev_device *mddev, int remove)
+static struct md_monitor *lookup_md(const char *mdname, int remove)
 {
-	const char *mdname = udev_device_get_sysname(mddev);
 	struct md_monitor *tmp, *md = NULL;
 
 	if (!mdname)
@@ -632,8 +631,13 @@ static void detach_device(struct udev_device *udev_dev)
 		     udev_device_get_devpath(found->device));
 		if (!list_empty(&found->siblings)) {
 			struct md_monitor *md_dev;
+			const char *mdname = NULL;
 
-			md_dev = lookup_md(found->parent, 0);
+			pthread_mutex_lock(&found->lock);
+			if (found->parent)
+				mdname = udev_device_get_sysname(found->parent);
+			pthread_mutex_unlock(&found->lock);
+			md_dev = lookup_md(mdname, 0);
 			if (md_dev) {
 				remove_md_component(md_dev, found);
 				pthread_mutex_lock(&md_dev->device_lock);
@@ -1318,9 +1322,13 @@ static void fail_mirror(struct device_monitor *dev, enum md_rdev_status status)
 {
 	struct md_monitor *md_dev;
 	struct device_monitor *tmp;
-	const char *md_name;
+	const char *md_name = NULL;
 
-	md_dev = lookup_md(dev->parent, 0);
+	pthread_mutex_lock(&dev->lock);
+	if (dev->parent)
+		md_name = udev_device_get_sysname(dev->parent);
+	pthread_mutex_unlock(&dev->lock);
+	md_dev = lookup_md(md_name, 0);
 	if (!md_dev) {
 		warn("%s: No md device found", dev->dev_name);
 		return;
@@ -1389,9 +1397,13 @@ static void reset_mirror(struct device_monitor *dev)
 	struct md_monitor *md_dev;
 	int ready_devices;
 	struct device_monitor *tmp;
-	const char *md_name;
+	const char *md_name = NULL;
 
-	md_dev = lookup_md(dev->parent, 0);
+	pthread_mutex_lock(&dev->lock);
+	if (dev->parent)
+		md_name = udev_device_get_sysname(dev->parent);
+	pthread_mutex_unlock(&dev->lock);
+	md_dev = lookup_md(md_name, 0);
 	if (!md_dev) {
 		warn("%s: No md device found", dev->dev_name);
 		return;
@@ -1989,11 +2001,11 @@ static int monitor_md(struct udev_device *md_dev)
 	return 0;
 }
 
-static void unmonitor_md(struct udev_device *md_dev)
+static void unmonitor_md(const char *md_name)
 {
 	struct md_monitor *found_md = NULL;
 
-	found_md = lookup_md(md_dev, 1);
+	found_md = lookup_md(md_name, 1);
 	if (found_md)
 		remove_md(found_md);
 }
@@ -2194,7 +2206,7 @@ static void handle_event(struct udev_device *device)
 	} else if (!strcmp(action, "change")) {
 		if (!strncmp(devname, "md", 2)) {
 			if (monitor_md(device) != 0)
-				unmonitor_md(device);
+				unmonitor_md(devname);
 		}
 		if (!strncmp(devname, "dasd", 4) ||
 		    !strncmp(devname, "dm-", 3)) {
@@ -2202,7 +2214,7 @@ static void handle_event(struct udev_device *device)
 		}
 	} else if (!strcmp(action, "remove")) {
 		if (!strncmp(devname, "md", 2)) {
-			unmonitor_md(device);
+			unmonitor_md(devname);
 		}
 		if (!strncmp(devname, "dasd" , 4) ||
 		    !strncmp(devname, "dm-", 3)) {
