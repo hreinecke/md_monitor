@@ -186,7 +186,7 @@ enum device_io_status mpath_check_status(struct device_monitor *dev,
 					 int timeout)
 {
 	int fd;
-	char inbuf[64];
+	char inbuf[280];
 	char *reply, *ptr, *eptr;
 	size_t len;
 	unsigned long num_paths;
@@ -249,7 +249,7 @@ out:
 int mpath_modify_queueing(struct device_monitor *dev, int enable, int timeout)
 {
 	int fd;
-	char inbuf[64];
+	char inbuf[276];
 	char *reply;
 	size_t len;
 	int ret;
