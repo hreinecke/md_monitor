@@ -42,7 +42,7 @@ int dasd_set_attribute(struct device_monitor *dev, const char *attr, int value)
 {
 	struct udev_device *parent;
 	int attr_fd;
-	char attrpath[256];
+	char attrpath[261];
 	char status[64], *eptr;
 	ssize_t len, status_len = 64;
 	int oldvalue;
@@ -115,7 +115,7 @@ out_close:
 int dasd_setup_aio(struct device_monitor *dev)
 {
 	const char *devnode;
-	char devnode_s[256];
+	char devnode_s[261];
 	int rc, flags;
 
 	dev->aio_active = 0;
