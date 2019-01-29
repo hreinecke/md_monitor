@@ -72,6 +72,7 @@ struct md_monitor {
 	int pending_side;
 	int raid_disks;
 	int layout;
+	int level;
 	int in_recovery;
 	int degraded;
 	int in_discovery;

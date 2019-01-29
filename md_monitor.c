@@ -687,6 +687,9 @@ static void md_rdev_update_index(struct md_monitor *md,
 		}
 		if (info.major == 0 && info.minor == 0)
 			continue;
+		/* Skip devices on arrays other than RAID10 */
+		if (md->level != 10)
+			continue;
 
 		/*
 		 * Figure out the corresponding block device.
@@ -1605,7 +1608,11 @@ static void discover_md_components(struct md_monitor *md)
 		}
 		if (info.major == 0 && info.minor == 0)
 			continue;
-
+		if (md->level != 10) {
+			info("%s: skip disk %d on RAID%d array", mdname, i,
+			     md->level);
+			continue;
+		}
 		info("%s: discover raid disk %d (%d:%d)", mdname, i,
 		     info.major, info.minor);
 
@@ -1894,6 +1901,10 @@ static int check_md(struct md_monitor *md_dev, mdu_array_info_t *info)
 				err("%s: ioctl GET_ARRAY_INFO failed: %m",
 				    md_dev->dev_name);
 			info->raid_disks = 0;
+		} else if (info->level != 10) {
+			warn("%s: Not a RAID10 array, ignoring",
+			     md_dev->dev_name);
+			rc = EINVAL;
 		} else if (info->raid_disks == 0) {
 			warn("%s: no RAID disks, ignoring", md_dev->dev_name);
 			rc = EAGAIN;
@@ -1939,6 +1950,7 @@ static int monitor_md(struct udev_device *md_dev)
 		       udev_device_get_devpath(md_dev));
 		found->raid_disks = info.raid_disks;
 		found->layout = info.layout;
+		found->level = info.level;
 		discover_md_components(found);
 	} else {
 		const char *alias_name;
