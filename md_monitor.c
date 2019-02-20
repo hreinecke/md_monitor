@@ -1218,6 +1218,7 @@ void *dasd_monitor_thread (void *ctx)
 			pthread_mutex_lock(&dev->lock);
 			break;
 		}
+		pthread_testcancel();
 		if (io_status != IO_TIMEOUT) {
 			int md_slot = -1;
 
@@ -1381,6 +1382,7 @@ static void monitor_dasd(struct device_monitor *dev)
 		dev->running = 0;
 		pthread_mutex_unlock(&dev->lock);
 		/* Yield lock here to give stale threads time to react */
+		pthread_yield();
 	} else {
 		pthread_mutex_unlock(&dev->lock);
 		/* Start new monitor thread */
