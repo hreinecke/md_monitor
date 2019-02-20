@@ -728,7 +728,7 @@ enum md_rdev_status md_rdev_check_state(struct device_monitor *dev)
 	int ioctl_fd;
 	char attrpath[256];
 	mdu_disk_info_t info;
-	enum md_rdev_status md_status;
+	enum md_rdev_status md_status = SPARE;
 	const char *sysname;
 
 	if (!dev)
@@ -747,9 +747,12 @@ enum md_rdev_status md_rdev_check_state(struct device_monitor *dev)
 	if (ioctl(ioctl_fd, GET_DISK_INFO, &info) < 0) {
 		err("%s: ioctl GET_DISK_INFO failed: %m",
 		    dev->dev_name);
-		info.state = 1 << MD_DISK_REMOVED;
+		md_status = UNKNOWN;
 	}
 	close(ioctl_fd);
+
+	if (md_status == UNKNOWN)
+		return md_status;
 
 	if ((info.state & (1 << MD_DISK_ACTIVE)) &&
 	    (info.state & (1 << MD_DISK_SYNC)))
@@ -761,8 +764,6 @@ enum md_rdev_status md_rdev_check_state(struct device_monitor *dev)
 			md_status = FAULTY;
 	} else if (info.state & (1 << MD_DISK_REMOVED))
 		md_status = REMOVED;
-	else
-		md_status = SPARE;
 
 	/*
 	 * TIMEOUT and FAULTY will set the slot number
@@ -1028,6 +1029,9 @@ void *device_monitor_thread (void *ctx)
 			md_status = md_rdev_check_state(dev);
 			if (md_status == UNKNOWN) {
 				/* array has been stopped */
+				info("%s: stopping monitor in status %s",
+				     dev->dev_name,
+				     md_rdev_print_state(md_status));
 				pthread_mutex_lock(&dev->lock);
 				break;
 			}
