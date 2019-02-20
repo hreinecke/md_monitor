@@ -1112,7 +1112,6 @@ void *device_monitor_thread (void *ctx)
 static void monitor_device(struct device_monitor *dev)
 {
 	int rc;
-	pthread_t thread;
 
 	if (strncmp(dev->dev_name, "dasd", 4))
 		return;
@@ -1122,11 +1121,12 @@ static void monitor_device(struct device_monitor *dev)
 	if (dev->running) {
 		/* check if thread is still alive */
 		if (dev->thread) {
+			pthread_t thread = dev->thread;
+
 			/* Yes, everything is okay */
 			info("%s: notify monitor thread",
 			     dev->dev_name);
 			/* Release the lock to avoid deadlocking */
-			thread = dev->thread;
 			pthread_mutex_unlock(&dev->lock);
 			device_monitor_put(dev);
 			pthread_kill(thread, SIGHUP);
@@ -1145,19 +1145,16 @@ static void monitor_device(struct device_monitor *dev)
 	pthread_mutex_lock(&dev->lock);
 	dev->running = 1;
 	pthread_mutex_unlock(&dev->lock);
-	rc = pthread_create(&thread, &monitor_attr,
+	rc = pthread_create(&dev->thread, &monitor_attr,
 			    device_monitor_thread, dev);
 	if (rc) {
 		pthread_mutex_lock(&dev->lock);
 		dev->running = 0;
 		dev->io_status = IO_UNKNOWN;
+		dev->thread = 0;
 		pthread_mutex_unlock(&dev->lock);
 		warn("%s: Failed to start monitor thread, error %d",
 		     dev->dev_name, rc);
-	} else {
-		pthread_mutex_lock(&dev->lock);
-		dev->thread = thread;
-		pthread_mutex_unlock(&dev->lock);
 	}
 	device_monitor_put(dev);
 }
