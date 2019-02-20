@@ -453,16 +453,16 @@ static struct md_monitor *lookup_md_new(struct udev_device *md_dev)
 		}
 		strncpy(md->dev_name, mdname, MD_NAMELEN);
 		md->dev_name[MD_NAMELEN - 1] = '\0';
-	}
-	if (!md->device) {
-		md->device = md_dev;
 		md->raid_disks = -1;
-		udev_device_ref(md_dev);
 		INIT_LIST_HEAD(&md->children);
 		INIT_LIST_HEAD(&md->pending);
 		pthread_mutex_init(&md->status_lock, NULL);
 		pthread_mutex_init(&md->device_lock, NULL);
 		list_add(&md->entry, &md_list);
+	}
+	if (!md->device) {
+		md->device = md_dev;
+		udev_device_ref(md_dev);
 	}
 out_unlock:
 	pthread_mutex_unlock(&md_lock);
