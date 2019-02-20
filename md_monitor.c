@@ -1022,6 +1022,7 @@ void *device_monitor_thread (void *ctx)
 			pthread_mutex_lock(&dev->lock);
 			break;
 		}
+		pthread_testcancel();
 		if (io_status != IO_TIMEOUT) {
 			/* Re-check; status might have been changed during aio */
 			md_status = md_rdev_check_state(dev);
@@ -1135,6 +1136,7 @@ static void monitor_device(struct device_monitor *dev)
 		dev->running = 0;
 		pthread_mutex_unlock(&dev->lock);
 		/* Yield lock here to give stale threads time to react */
+		pthread_yield();
 	} else {
 		pthread_mutex_unlock(&dev->lock);
 		/* Start new monitor thread */
