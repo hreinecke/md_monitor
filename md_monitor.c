@@ -1224,8 +1224,11 @@ void *dasd_monitor_thread (void *ctx)
 
 			/* Re-check; status might have been changed during aio */
 			md_status = md_rdev_check_state(dev, &md_slot);
-			if (md_status == UNKNOWN) {
+			if (md_status == UNKNOWN || md_status == REMOVED) {
 				/* array has been stopped */
+				info("%s: stopping monitor in status %s",
+				     dev->dev_name,
+				     md_rdev_print_state(md_status));
 				pthread_mutex_lock(&dev->lock);
 				break;
 			}
