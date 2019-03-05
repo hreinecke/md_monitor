@@ -1566,6 +1566,7 @@ static void remove_md_component(struct md_monitor *md_dev,
 		     dev->dev_name);
 		dev->running = 0;
 		pthread_mutex_unlock(&dev->lock);
+		pthread_kill(thread, SIGHUP);
 		if (pthread_cancel(thread) == 0)
 			pthread_join(thread, NULL);
 	} else {
