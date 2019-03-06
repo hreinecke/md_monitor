@@ -99,6 +99,7 @@ struct cli_monitor {
 
 struct md_monitor {
 	char dev_name[MD_NAMELEN];
+	char alias_name[MD_NAMELEN];
 	struct list_head entry;
 	struct list_head children;
 	pthread_mutex_t device_lock;
@@ -320,6 +321,10 @@ static struct md_monitor *lookup_md(const char *mdname, int remove)
 			md = tmp;
 			break;
 		}
+		if (!strcmp(tmp->alias_name, mdname)) {
+			md = tmp;
+			break;
+		}
 	}
 	if (remove && md)
 		list_del_init(&md->entry);
@@ -354,8 +359,8 @@ static struct md_monitor *lookup_md_alias(const char *mdpath)
 			md = tmp;
 			break;
 		}
-		tmpname = udev_device_get_sysname(tmp->device);
-		if (tmpname && !strcmp(tmpname, mdname)) {
+		if (strlen(tmp->alias_name) &&
+		    !strcmp(tmp->alias_name, mdname)) {
 			md = tmp;
 			break;
 		}
@@ -439,6 +444,17 @@ static struct md_monitor *lookup_md_new(struct udev_device *md_dev)
 			md = tmp;
 			break;
 		}
+		if (strlen(tmp->alias_name)) {
+			if (!strcmp(tmp->alias_name, mdname)) {
+				md = tmp;
+				break;
+			}
+			if (alias_name &&
+			    !strcmp(tmp->alias_name, alias_name)) {
+				md = tmp;
+				break;
+			}
+		}
 	}
 	if (!md) {
 		md = malloc(sizeof(struct md_monitor));
@@ -459,6 +475,7 @@ static struct md_monitor *lookup_md_new(struct udev_device *md_dev)
 		pthread_mutex_init(&md->status_lock, NULL);
 		pthread_mutex_init(&md->device_lock, NULL);
 		list_add(&md->entry, &md_list);
+		info("%s: create new array", mdname);
 	}
 	if (!md->device) {
 		md->device = md_dev;
@@ -2137,10 +2154,10 @@ static int monitor_md(struct udev_device *md_dev)
 		alias_name = udev_device_get_property_value(md_dev,
 							    "MD_DEVNAME");
 		if (alias_name && strcmp(found->dev_name, alias_name)) {
-			info("%s: updating alias to %s\n",
+			info("%s: setting alias to %s\n",
 			     found->dev_name, alias_name);
-			strncpy(found->dev_name, alias_name, MD_NAMELEN);
-			found->dev_name[MD_NAMELEN - 1] = '\0';
+			strncpy(found->alias_name, alias_name, MD_NAMELEN);
+			found->alias_name[MD_NAMELEN - 1] = '\0';
 		} else
 			warn("%s: Already monitoring %s", found->dev_name,
 			     udev_device_get_devpath(found->device));
