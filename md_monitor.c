@@ -359,11 +359,23 @@ static struct md_monitor *lookup_md_new(struct udev_device *md_dev)
 	alias_name = udev_device_get_property_value(md_dev, "MD_DEVICE");
 	pthread_mutex_lock(&md_lock);
 	list_for_each_entry(tmp, &md_list, entry) {
+		const char *tmpname;
+
+		/* Check if the alias matches (if set in the properties) */
 		if (alias_name && !strcmp(tmp->dev_name, alias_name)) {
 			md = tmp;
 			break;
 		}
+		/* Check if the name matches the stored device name */
 		if (!strcmp(tmp->dev_name, mdname)) {
+			md = tmp;
+			break;
+		}
+		/* Check if the name matches the actual device name */
+		if (!tmp->device)
+			continue;
+		tmpname = udev_device_get_sysname(tmp->device);
+		if (tmpname && !strcmp(tmpname, mdname)) {
 			md = tmp;
 			break;
 		}
@@ -387,6 +399,7 @@ static struct md_monitor *lookup_md_new(struct udev_device *md_dev)
 		pthread_mutex_init(&md->status_lock, NULL);
 		pthread_mutex_init(&md->device_lock, NULL);
 		list_add(&md->entry, &md_list);
+		info("%s: create new array", mdname);
 	}
 	if (!md->device) {
 		md->device = md_dev;
