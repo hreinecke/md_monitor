@@ -310,13 +310,19 @@ static void sig_handler(int signum)
 static struct md_monitor *lookup_md(const char *mdname, int remove)
 {
 	struct md_monitor *tmp, *md = NULL;
+	const char *tmpname;
 
 	if (!mdname)
 		return NULL;
 
 	pthread_mutex_lock(&md_lock);
 	list_for_each_entry(tmp, &md_list, entry) {
-		if (!strcmp(tmp->dev_name, mdname)) {
+		if (strlen(tmp->dev_name) && !strcmp(tmp->dev_name, mdname)) {
+			md = tmp;
+			break;
+		}
+		tmpname = udev_device_get_sysname(tmp->device);
+		if (tmpname && !strcmp(tmpname, mdname)) {
 			md = tmp;
 			break;
 		}
