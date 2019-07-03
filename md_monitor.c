@@ -2032,6 +2032,8 @@ static int display_md_status(struct md_monitor *md_dev, char *buf, int buflen)
 	}
 	pthread_mutex_unlock(&md_dev->device_lock);
 	max_slot++;
+	if (md_dev->raid_disks < buflen && md_dev->raid_disks > max_slot)
+		max_slot = md_dev->raid_disks;
 	if (max_slot >= buflen) {
 		warn("%s: CLI buffer too small, min %d\n",
 		     md_dev->dev_name, max_slot);
@@ -2074,6 +2076,8 @@ static int display_io_status(struct md_monitor *md_dev, char *buf, int buflen)
 	pthread_mutex_unlock(&md_dev->device_lock);
 
 	max_slot++;
+	if (md_dev->raid_disks < buflen && md_dev->raid_disks > max_slot)
+		max_slot = md_dev->raid_disks;
 	if (max_slot >= buflen) {
 		warn("%s: CLI buffer too small, min %d",
 		     md_dev->dev_name, max_slot);
