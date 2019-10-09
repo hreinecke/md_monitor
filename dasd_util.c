@@ -212,7 +212,7 @@ enum device_io_status dasd_check_aio(struct device_monitor *dev, int timeout)
 		ioptr = (unsigned char *) (((unsigned long)dev->buf +
 					    pgsize - 1) & (~(pgsize - 1)));
 		io_prep_pread(&dev->io, dev->fd, ioptr,
-			      4096, 0);
+			      (size_t)dev->blksize, 0);
 		if (gettimeofday(&dev->aio_start_time, NULL)) {
 			warn("%s: failed to get time: %m", dev->dev_name);
 			dev->aio_start_time.tv_sec = 0;
