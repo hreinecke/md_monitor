@@ -1680,6 +1680,11 @@ static void discover_md_components(struct md_monitor *md)
 				    mdname, info.major, info.minor);
 				continue;
 			}
+			lock_device_list();
+			list_add(&found->entry, &device_list);
+			info("%s: attached '%s'", found->dev_name,
+			     udev_device_get_devpath(mon_dev));
+			unlock_device_list();
 		}
 		found->md_index = i;
 		found->md_slot = info.raid_disk;
