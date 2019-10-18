@@ -2267,6 +2267,7 @@ static void *mdadm_exec_thread (void *ctx)
 			if (gettimeofday(&start_time, NULL) < 0)
 				start_time.tv_sec = 0;
 
+			pthread_mutex_lock(&md_dev->status_lock);
 			list_del_init(&md_dev->pending);
 			if (md_dev->pending_status == UNKNOWN) {
 				pthread_mutex_unlock(&md_dev->status_lock);
