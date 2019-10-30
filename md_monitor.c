@@ -1464,12 +1464,16 @@ static void reset_mirror(struct device_monitor *dev)
 	     ready_devices, md_dev->raid_disks);
 
 	pthread_mutex_lock(&md_dev->status_lock);
-	pthread_mutex_lock(&pending_lock);
-	md_dev->pending_status = IN_SYNC;
-	md_dev->pending_side = (1 << side);
-	list_add(&md_dev->pending, &pending_list);
-	pthread_cond_signal(&pending_cond);
-	pthread_mutex_unlock(&pending_lock);
+	if (list_empty(&md_dev->pending)) {
+		pthread_mutex_lock(&pending_lock);
+		md_dev->pending_status = IN_SYNC;
+		md_dev->pending_side = (1 << side);
+		list_add(&md_dev->pending, &pending_list);
+		pthread_cond_signal(&pending_cond);
+		pthread_mutex_unlock(&pending_lock);
+	} else {
+		info("%s: reset already scheduled", md_name);
+	}
 	pthread_mutex_unlock(&md_dev->status_lock);
 }
 
