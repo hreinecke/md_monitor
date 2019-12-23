@@ -1703,6 +1703,7 @@ static void discover_md_components(struct md_monitor *md)
 			if (!found) {
 				err("%s: out of memory allocating device (%d:%d)",
 				    mdname, info.major, info.minor);
+				udev_device_unref(raid_dev);
 				continue;
 			}
 			lock_device_list();
@@ -1724,12 +1725,14 @@ static void discover_md_components(struct md_monitor *md)
 								"dm/name");
 			if (!sysname) {
 				warn("%s: no device-mapper name", sysname);
+				udev_device_unref(raid_dev);
 				continue;
 			}
 		}
 		if (!list_empty(&found->siblings)) {
 			warn("%s: Already monitoring %s",
 			     mdname, found->md_name);
+			udev_device_unref(raid_dev);
 		} else {
 			add_component(md, found, sysname);
 			info("%s: Start monitoring %s", mdname, found->md_name);
