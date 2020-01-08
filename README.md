@@ -31,7 +31,7 @@ a) I/O returned ok:
    - if the MD array has registered the device as 'faulty', a
      manual array recovery is triggered by executing the command:
 
-  mdadm --manage /dev/mdX --remove /dev/dasdY --re-add /dev/dasdY
+> mdadm --manage /dev/mdX --remove /dev/dasdY --re-add /dev/dasdY
 
 b) I/O returned with error:
    - if the MD array has registered the device as 'faulty', no
@@ -40,7 +40,7 @@ b) I/O returned with error:
      MD array is instructed to fail the device by executing the
      command:
 
- mdadm --manage /dev/mdX --fail /dev/dasdY
+> mdadm --manage /dev/mdX --fail /dev/dasdY
 
 c) I/O does not return after a given timeout:
    - if the number of retries has not been exceeded, re-check
@@ -65,16 +65,16 @@ To do this, the administrator has to issue the command:
 to instruct md_monitor to stop monitoring device '/dev/dasdY' on MD
 array '/dev/mdX'. Then the device can be set to faulty with
 
-mdadm --manage /dev/mdX --fail /dev/dasdY
+> mdadm --manage /dev/mdX --fail /dev/dasdY
 
 and removed from the MD array with:
 
-mdadm --manage /dev/mdX --remove /dev/dasdY
+> mdadm --manage /dev/mdX --remove /dev/dasdY
 
 The new disk can be added with
 
-mdadm --zero-superblock /dev/dasdZ
-mdadm --manage /dev/mdX --add /dev/dasdZ
+> mdadm --zero-superblock /dev/dasdZ
+> mdadm --manage /dev/mdX --add /dev/dasdZ
 
 md_monitor will pick up the changes automatically and start
 monitoring the new device.
@@ -108,7 +108,7 @@ md_monitor is informed about state changes from MD array either from
 uevents or from mdadm in 'monitor' operation.
 mdadm needs to be started with
 
-mdadm --monitor --scan --program <MONITOR_SCRIPT>
+> mdadm --monitor --scan --program <MONITOR_SCRIPT>
 
 where <MONITOR_SCRIPT> is a bash script containing the following:
 
@@ -132,67 +132,78 @@ The default monitor script is installed under
 
 md_monitor has the following command-line options:
 
--d
---daemonize   Start md_monitor in background
+-d::
+--daemonize::
+	Start md_monitor in background
 
--f <file>
---logfile=<file>	Write logging information into <file>
-			instead of stdout
--s
---syslog		Write logging information to syslog.
+-f <file>::
+--logfile=<file>::
+	write logging information into <file> instead of stdout
 
--e <num>
---expires=<num>		Set failfast_expires to <num>
+-s::
+--syslog::
+	Write logging information to syslog.
 
--r <num>
---retries=<num>		Set failfast_retries to <num>
+-e <num>::
+--expires=<num>::
+	Set failfast_expires to <num>
 
--p <prio>
---log-priority=<prio>	Set logging priority to <num>
+-r <num>::
+--retries=<num>::
+	Set failfast_retries to <num>
 
--v
---verbose		Increase logging priority
+-p <prio>::
+--log-priority=<prio>::
+	Set logging priority to <num>
 
--c <cmd>
---command=<cmd>		Send command <cmd> to daemon
+-v::
+--verbose::
+	Increase logging priority
 
--h
---help			Display usage information
+-c <cmd>::
+--command=<cmd>::
+	Send command <cmd> to daemon
+
+-h::
+--help::
+	Display usage information
 
 The --command option instructs the program to connect to a already
 running md_monitor program and send a pre-defined command. The command
 has the following syntax:
 
-<cmd>:<md>(@<dev>)
+> <cmd>:<md>(@<dev>)
 
 The following values for <cmd> are recognised. If not specified
 otherwise, <md> needs to be the device node of an existing MD array.
 
-Shutdown      	     Shutdown md_monitor;
-		     <md> argument should be /dev/console
+Shutdown::
+	Shutdown md_monitor;
+	<md> argument should be /dev/console
 
-RebuildStarted	     Rebuild has started on array <md>.
+RebuildStarted::
+	Rebuild has started on array <md>.
 
-RebuildFinished	     Rebuild has finished on array <md>.
+RebuildFinished::
+	Rebuild has finished on array <md>.
 
-DeviceDisappeared    MD array has been stopped; md_monitor will stop
-		     monitoring of the component devices for that
-		     array.
+DeviceDisappeared::
+	MD array has been stopped; md_monitor will stop
+	monitoring of the component devices for that array.
 
-Fail		     MD detected a failure on the component
-		     device <dev>. md_monitor will re-check the device
-		     every 'failfast_timeout' seconds.
+Fail::
+	MD detected a failure on the component device <dev>.
+	md_monitor will re-check the device every 'failfast_timeout' seconds.
 
-Remove		     The component device <dev> has been removed
-		     from the MD array <md>. md_monitor will stop
-		     monitoring this device.
+Remove::
+	The component device <dev> has been removed from the MD array <md>.
+	md_monitor will stop monitoring this device.
 
-SpareActive	     MD has integrated the device <dev> into array
-		     <md>. md_monitor will re-start monitoring of
-		     this device every 'failfast_timeout' seconds.
-		     The check interval will be increased for each
-		     successful check up to a maximum of
-		     'failfast_timeout' * 'failfast_retries' seconds.
+SpareActive::
+	MD has integrated the device <dev> into array <md>.
+	md_monitor will re-start monitoring this device every 'failfast_timeout' seconds.
+	The check interval will be increased for each successful check up to a maximum of
+	'failfast_timeout' * 'failfast_retries' seconds.
 
 	
 
