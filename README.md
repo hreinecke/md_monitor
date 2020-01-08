@@ -172,41 +172,41 @@ The --command option instructs the program to connect to a already
 running md_monitor program and send a pre-defined command. The command
 has the following syntax:
 
-'''
+```
 <cmd>:<md>(@<dev>)
-'''
+```
 
 The following values for <cmd> are recognised. If not specified
 otherwise, <md> needs to be the device node of an existing MD array.
 
-Shutdown
-	Shutdown md_monitor;
-	<md> argument should be /dev/console
+<dl>
+	<dt>Shutdown</dt>
+	<dd>Shutdown md_monitor;<md> argument should be /dev/console</dd>
 
-RebuildStarted
-	Rebuild has started on array <md>.
+	<dt>RebuildStarted</dt>
+	<dd>Rebuild has started on array <md>.</dd>
 
-RebuildFinished
-	Rebuild has finished on array <md>.
+	<dt>RebuildFinished</dt>
+	<dd>Rebuild has finished on array <md>.</dd>
 
-DeviceDisappeared
-	MD array has been stopped; md_monitor will stop
-	monitoring of the component devices for that array.
+	<dt>DeviceDisappeared</dt>
+	<dd>MD array has been stopped; md_monitor will stop
+	monitoring of the component devices for that array.</dd>
 
-Fail
-	MD detected a failure on the component device <dev>.
-	md_monitor will re-check the device every 'failfast_timeout' seconds.
+	<dt>Fail</dt>
+	<dd>MD detected a failure on the component device <dev>.
+	md_monitor will re-check the device every 'failfast_timeout' seconds.</dd>
 
-Remove
-	The component device <dev> has been removed from the MD array <md>.
-	md_monitor will stop monitoring this device.
+	<dt>Remove</dt>
+	<dd>The component device <dev> has been removed from the MD array <md>.
+	md_monitor will stop monitoring this device.</dd>
 
-SpareActive
-	MD has integrated the device <dev> into array <md>.
+	<dt>SpareActive</dt>
+	<dd>MD has integrated the device <dev> into array <md>.
 	md_monitor will re-start monitoring this device every 'failfast_timeout' seconds.
 	The check interval will be increased for each successful check up to a maximum of
-	'failfast_timeout' * 'failfast_retries' seconds.
+	'failfast_timeout' * 'failfast_retries' seconds.</dd>
 
-	
+</dl>
 
 		
