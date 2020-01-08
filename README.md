@@ -182,31 +182,24 @@ otherwise, <md> needs to be the device node of an existing MD array.
 <dl>
 	<dt>Shutdown</dt>
 	<dd>Shutdown md_monitor;<md> argument should be /dev/console</dd>
-
 	<dt>RebuildStarted</dt>
 	<dd>Rebuild has started on array <md>.</dd>
-
 	<dt>RebuildFinished</dt>
 	<dd>Rebuild has finished on array <md>.</dd>
-
 	<dt>DeviceDisappeared</dt>
 	<dd>MD array has been stopped; md_monitor will stop
 	monitoring of the component devices for that array.</dd>
-
 	<dt>Fail</dt>
 	<dd>MD detected a failure on the component device <dev>.
 	md_monitor will re-check the device every 'failfast_timeout' seconds.</dd>
-
 	<dt>Remove</dt>
 	<dd>The component device <dev> has been removed from the MD array <md>.
 	md_monitor will stop monitoring this device.</dd>
-
 	<dt>SpareActive</dt>
 	<dd>MD has integrated the device <dev> into array <md>.
 	md_monitor will re-start monitoring this device every 'failfast_timeout' seconds.
 	The check interval will be increased for each successful check up to a maximum of
 	'failfast_timeout' * 'failfast_retries' seconds.</dd>
-
 </dl>
 
 		
