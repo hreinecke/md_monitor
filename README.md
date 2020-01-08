@@ -60,7 +60,7 @@ before it can be replaced.
 
 To do this, the administrator has to issue the command:
 
-/sbin/md_monitor -c "Remove:/dev/mdX@/dev/dasdY"
+> /sbin/md_monitor -c "Remove:/dev/mdX@/dev/dasdY"
 
 to instruct md_monitor to stop monitoring device '/dev/dasdY' on MD
 array '/dev/mdX'. Then the device can be set to faulty with
