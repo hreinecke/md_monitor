@@ -24,7 +24,7 @@ install: all
 	install -D -m 644 md_monitor.man $(DESTDIR)$(MAN8DIR)/md_monitor.8
 	install -D -m 644 setdasd.man $(DESTDIR)$(MAN8DIR)/setdasd.8
 	install -D -m 644 md_monitor.service $(DESTDIR)/usr/lib/systemd/system/md_monitor.service
-	install -D -m 644 sysconfig.md_monitor $(DESTDIR)/var/adm/fillup-templates/sysconfig.md_monitor
+	install -D -m 644 sysconfig.md_monitor $(DESTDIR)/usr/share/fillup-templates/sysconfig.md_monitor
 
 md_monitor: md_monitor.o dasd_ioctl.o dasd_util.o mpath_util.c
 	$(CC) $(CFLAGS) -o $@ $^ -ludev -lpthread -laio
