@@ -347,6 +347,7 @@ static struct device_monitor * lookup_md_component(struct md_monitor *md_dev,
 			pthread_mutex_unlock(&tmp->lock);
 			break;
 		}
+		pthread_mutex_unlock(&tmp->lock);
 	}
 out:
 	pthread_mutex_unlock(&md_dev->device_lock);
