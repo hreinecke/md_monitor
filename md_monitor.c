@@ -108,6 +108,7 @@ void log_fn(int priority, const char *format, ...)
 		strftime(timestr, 32, "%a %d %T ", cur_tm);
 		fprintf(logfd, "%s", timestr);
 		vfprintf(logfd, format, ap);
+		fflush(logfd);
 	}
 	va_end(ap);
 }
@@ -222,10 +223,8 @@ static void unlock_device_list(void)
 
 void sig_handler(int signum)
 {
-	if (signum == SIGINT || signum == SIGTERM) {
-		fflush(logfd);
+	if (signum == SIGINT || signum == SIGTERM)
 		udev_exit = 1;
-	}
 }
 
 static struct md_monitor *lookup_md(const char *mdname, int remove)
@@ -347,6 +346,7 @@ static struct device_monitor * lookup_md_component(struct md_monitor *md_dev,
 			pthread_mutex_unlock(&tmp->lock);
 			break;
 		}
+		pthread_mutex_unlock(&tmp->lock);
 	}
 out:
 	pthread_mutex_unlock(&md_dev->device_lock);
