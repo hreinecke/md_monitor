@@ -2029,10 +2029,15 @@ static void discover_md(struct udev *udev)
 		md_dev = udev_device_new_from_syspath(udev, md_devpath);
 		warn("Testing %s", md_devpath);
 		if (md_dev) {
-			monitor_md(md_dev);
+			if (monitor_md(md_dev) != 0) {
+				md_devpath = udev_device_get_sysname(md_dev);
+				unmonitor_md(md_devpath);
+				goto unref;
+            }
 			udev_device_unref(md_dev);
 		}
 	}
+unref:
 	udev_enumerate_unref(md_enumerate);
 }
 
