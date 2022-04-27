@@ -2031,12 +2031,12 @@ static void discover_md(struct udev *udev)
 			if (monitor_md(md_dev) != 0) {
 				md_devpath = udev_device_get_sysname(md_dev);
 				unmonitor_md(md_devpath);
-				goto unref;
+				/* udev_device_unref() is already called in unmonitor_md() */
+				continue;
             }
 			udev_device_unref(md_dev);
 		}
 	}
-unref:
 	udev_enumerate_unref(md_enumerate);
 }
 
