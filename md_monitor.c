@@ -2969,7 +2969,7 @@ int main(int argc, char *argv[])
 	struct rlimit cur;
 	char *command_to_send = NULL;
 	char *logfile = NULL;
-	fd_set readfds;
+	struct pollfd readfd;
 	int monitor_fd;
 	int rc = 0;
 
@@ -3253,12 +3253,12 @@ int main(int argc, char *argv[])
 		int fdcount;
 		struct timespec tmo;
 
-		FD_ZERO(&readfds);
-		FD_SET(monitor_fd, &readfds);
+		readfd.fd = monitor_fd;
+		readfd.events = POLLIN;
 		tmo.tv_sec = 1;
 		tmo.tv_nsec = 0;
-		fdcount = pselect(monitor_fd + 1, &readfds,
-				  NULL, NULL, &tmo, &thread_sigmask);
+		fdcount = ppoll(&readfd, 1, &tmo, &thread_sigmask);
+
 		if (fdcount < 0) {
 			if (errno != EINTR)
 				warn("error receiving uevent message: %m");
@@ -3268,7 +3268,7 @@ int main(int argc, char *argv[])
 		if (fdcount == 0)
 			continue;
 
-		if (FD_ISSET(monitor_fd, &readfds)) {
+		if (readfd.revents & POLLIN) {
 			struct udev_device *device;
 
 			device = udev_monitor_receive_device(udev_monitor);
