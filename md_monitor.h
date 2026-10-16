@@ -20,6 +20,8 @@
 #ifndef _MD_MONITOR_H
 #define _MD_MONITOR_H
 
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof(*x))
+
 enum md_rdev_status {
 	UNKNOWN,	/* Not checked */
 	IN_SYNC,	/* device is in sync */

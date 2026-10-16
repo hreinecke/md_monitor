@@ -290,6 +290,64 @@ static struct md_monitor *lookup_md_alias(const char *mdpath)
 	return md;
 }
 
+static void check_mirror_status(struct md_monitor *md_dev)
+{
+	struct device_monitor *rdev;
+	int good[2] = {0, 0};
+	int i, degraded, new_degraded = 0;
+
+	if (!md_dev)
+		return;
+
+	pthread_mutex_lock(&md_dev->status_lock);
+	degraded = md_dev->degraded;
+	if (!md_dev->device) {
+		pthread_mutex_unlock(&md_dev->status_lock);
+		return;
+	}
+	pthread_mutex_unlock(&md_dev->status_lock);
+
+	pthread_mutex_lock(&md_dev->device_lock);
+	list_for_each_entry(rdev, &md_dev->children, siblings) {
+		int md_status, md_side, md_slot, new_side;
+
+		pthread_mutex_lock(&rdev->lock);
+		md_side = rdev->md_side;
+		md_status = md_rdev_check_state(rdev, &md_slot);
+		md_status = md_rdev_update_state(rdev, md_status, md_slot);
+		pthread_mutex_unlock(&rdev->lock);
+
+		new_side = md_slot % (md_dev->layout & 0xFF);
+		if (md_side != new_side)
+			warn("%s: side has changed from %d to %d",
+			     rdev->dev_name, md_side, new_side);
+		if (new_side >= 0 && md_status == IN_SYNC)
+			good[new_side]++;
+	}
+	pthread_mutex_unlock(&md_dev->device_lock);
+
+	for (i = 0; i < ARRAY_SIZE(good); i++)
+		if (good[i] < md_dev->raid_disks / 2) {
+			new_degraded |= (1 << i);
+			warn("%s: side %c is degraded, only %d/%d disks",
+			     md_dev->dev_name, 'A' + i, good[i], md_dev->raid_disks / 2);
+		} else
+			dbg("%s: side %c is healthy, %d/%d disks",
+			    md_dev->dev_name, 'A' + i, good[i], md_dev->raid_disks / 2);
+
+	if (degraded != new_degraded) {
+		info("%s: setting degraded to 0x%x", md_dev->dev_name, new_degraded);
+		pthread_mutex_lock(&md_dev->status_lock);
+		md_dev->degraded = new_degraded;
+		pthread_mutex_unlock(&md_dev->status_lock);
+	}
+
+	if ((new_degraded & 3) == 3) {
+		warn("%s: both array sides are degraded on monitor startup",
+		     md_dev->dev_name);
+	}
+}
+
 static struct device_monitor * lookup_md_component(struct md_monitor *md_dev,
 						   const char *devname)
 {
@@ -1987,6 +2045,7 @@ static int monitor_md(struct udev_device *md_dev)
 		found->layout = info.layout;
 		found->level = info.level;
 		discover_md_components(found);
+		check_mirror_status(found);
 	} else {
 		const char *alias_name;
 
