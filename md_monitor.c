@@ -2632,6 +2632,12 @@ void *cli_monitor_thread(void *ctx)
 			iov.iov_len = 0;
 			goto send_msg;
 		}
+		if (!strcmp(event, "DegradedArray")) {
+			check_mirror_status(md_dev);
+			buf[0] = 0;
+			iov.iov_len = 0;
+			goto send_msg;
+		}
 		if (!strcmp(event, "ArrayStatus")) {
 			buflen = display_md(md_dev, buf);
 			if (buflen < 0) {
