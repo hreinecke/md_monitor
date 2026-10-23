@@ -1616,6 +1616,7 @@ static void sync_md_component(struct md_monitor *md_dev,
 	 */
 	dev->md_status = IN_SYNC;
 	pthread_mutex_unlock(&dev->lock);
+	check_mirror_status(md_dev);
 	monitor_device(dev);
 }
 
