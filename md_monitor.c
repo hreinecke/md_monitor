@@ -2632,6 +2632,14 @@ void *cli_monitor_thread(void *ctx)
 			iov.iov_len = 0;
 			goto send_msg;
 		}
+		if (!strcmp(event, "TestMessage")) {
+			/* No useful information */
+			int n = snprintf(buf, CLI_BUFLEN,
+					 "test message for %s received ok",
+					 md_dev->dev_name);
+			iov.iov_len = (n < CLI_BUFLEN ? n + 1 : CLI_BUFLEN);
+			goto send_msg;
+		}
 		if (!strcmp(event, "DegradedArray")) {
 			check_mirror_status(md_dev);
 			buf[0] = 0;
