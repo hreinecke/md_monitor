@@ -1999,6 +1999,10 @@ static int check_md(struct md_monitor *md_dev, mdu_array_info_t *info)
 			warn("%s: Not a RAID10 array, ignoring",
 			     md_dev->dev_name);
 			rc = EINVAL;
+		} else if ((info->layout & 0xFFFF) != 0x0102) {
+			warn("%s: Unsupported layout 0x%04x, ignoring",
+			     info->layout & 0xFFFF);
+			rc = EINVAL;
 		} else if (info->raid_disks == 0) {
 			warn("%s: no RAID disks, ignoring", md_dev->dev_name);
 			rc = EAGAIN;
