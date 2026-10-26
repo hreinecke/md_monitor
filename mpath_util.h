@@ -18,7 +18,7 @@
  */
 
 #ifndef _MPATH_UTIL_H
-#define _MPATH_UITL_H
+#define _MPATH_UTIL_H
 
 enum device_io_status mpath_check_status(struct device_monitor *dev,
 					 int timeout);

@@ -18,7 +18,7 @@
  */
 
 #ifndef _DASD_UTIL_H
-#define _DASD_UITL_H
+#define _DASD_UTIL_H
 
 extern int dasd_set_attribute(struct device_monitor *dev, const char *attr,
 			      int value);

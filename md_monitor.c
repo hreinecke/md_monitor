@@ -48,6 +48,7 @@
 #define MD_DISK_TIMEOUT 11
 #endif
 #include <pthread.h>
+#include <sched.h>
 #include <dirent.h>
 #include <libaio.h>
 
@@ -287,6 +288,64 @@ static struct md_monitor *lookup_md_alias(const char *mdpath)
 	}
 	pthread_mutex_unlock(&md_lock);
 	return md;
+}
+
+static void check_mirror_status(struct md_monitor *md_dev)
+{
+	struct device_monitor *rdev;
+	int good[2] = {0, 0};
+	int i, degraded, new_degraded = 0;
+
+	if (!md_dev)
+		return;
+
+	pthread_mutex_lock(&md_dev->status_lock);
+	degraded = md_dev->degraded;
+	if (!md_dev->device) {
+		pthread_mutex_unlock(&md_dev->status_lock);
+		return;
+	}
+	pthread_mutex_unlock(&md_dev->status_lock);
+
+	pthread_mutex_lock(&md_dev->device_lock);
+	list_for_each_entry(rdev, &md_dev->children, siblings) {
+		int md_status, md_side, md_slot, new_side;
+
+		pthread_mutex_lock(&rdev->lock);
+		md_side = rdev->md_side;
+		md_status = md_rdev_check_state(rdev, &md_slot);
+		md_status = md_rdev_update_state(rdev, md_status, md_slot);
+		pthread_mutex_unlock(&rdev->lock);
+
+		new_side = md_slot % (md_dev->layout & 0xFF);
+		if (md_side != new_side)
+			warn("%s: side has changed from %d to %d",
+			     rdev->dev_name, md_side, new_side);
+		if (new_side >= 0 && md_status == IN_SYNC)
+			good[new_side]++;
+	}
+	pthread_mutex_unlock(&md_dev->device_lock);
+
+	for (i = 0; i < ARRAY_SIZE(good); i++)
+		if (good[i] < md_dev->raid_disks / 2) {
+			new_degraded |= (1 << i);
+			warn("%s: side %c is degraded, only %d/%d disks",
+			     md_dev->dev_name, 'A' + i, good[i], md_dev->raid_disks / 2);
+		} else
+			dbg("%s: side %c is healthy, %d/%d disks",
+			    md_dev->dev_name, 'A' + i, good[i], md_dev->raid_disks / 2);
+
+	if (degraded != new_degraded) {
+		info("%s: setting degraded to 0x%x", md_dev->dev_name, new_degraded);
+		pthread_mutex_lock(&md_dev->status_lock);
+		md_dev->degraded = new_degraded;
+		pthread_mutex_unlock(&md_dev->status_lock);
+	}
+
+	if ((new_degraded & 3) == 3) {
+		warn("%s: both array sides are degraded on monitor startup",
+		     md_dev->dev_name);
+	}
 }
 
 static struct device_monitor * lookup_md_component(struct md_monitor *md_dev,
@@ -1170,7 +1229,7 @@ static void monitor_device(struct device_monitor *dev)
 		dev->running = 0;
 		pthread_mutex_unlock(&dev->lock);
 		/* Yield lock here to give stale threads time to react */
-		pthread_yield();
+		sched_yield();
 	} else {
 		pthread_mutex_unlock(&dev->lock);
 		/* Start new monitor thread */
@@ -1557,6 +1616,7 @@ static void sync_md_component(struct md_monitor *md_dev,
 	 */
 	dev->md_status = IN_SYNC;
 	pthread_mutex_unlock(&dev->lock);
+	check_mirror_status(md_dev);
 	monitor_device(dev);
 }
 
@@ -1939,6 +1999,10 @@ static int check_md(struct md_monitor *md_dev, mdu_array_info_t *info)
 			warn("%s: Not a RAID10 array, ignoring",
 			     md_dev->dev_name);
 			rc = EINVAL;
+		} else if ((info->layout & 0xFFFF) != 0x0102) {
+			warn("%s: Unsupported layout 0x%04x, ignoring",
+			     info->layout & 0xFFFF);
+			rc = EINVAL;
 		} else if (info->raid_disks == 0) {
 			warn("%s: no RAID disks, ignoring", md_dev->dev_name);
 			rc = EAGAIN;
@@ -1986,6 +2050,7 @@ static int monitor_md(struct udev_device *md_dev)
 		found->layout = info.layout;
 		found->level = info.level;
 		discover_md_components(found);
+		check_mirror_status(found);
 	} else {
 		const char *alias_name;
 
@@ -2439,22 +2504,30 @@ void *cli_monitor_thread(void *ctx)
 		if (buflen < 0) {
 			if (errno != EINTR)
 				err("error receiving cli message: %m");
-			continue;
+			buf[0] = errno ? : EIO;
+			iov.iov_len = 1;
+			goto send_msg;
 		}
 		cmsg = CMSG_FIRSTHDR(&smsg);
 		if (cmsg == NULL) {
 			warn("no cli credentials, ignore message");
-			continue;
+			buf[0] = EPERM;
+			iov.iov_len = 1;
+			goto send_msg;
 		}
 		if (cmsg->cmsg_type != SCM_CREDENTIALS) {
 			warn("invalid cli credentials %d/%d, ignore message",
 			     cmsg->cmsg_type, cmsg->cmsg_level);
-			continue;
+			buf[0] = EINVAL;
+			iov.iov_len = 1;
+			goto send_msg;
 		}
 		cred = (struct ucred *)CMSG_DATA(cmsg);
 		if (cred->uid != 0) {
 			warn("sender uid=%d, ignore message", cred->uid);
-			continue;
+			buf[0] = EPERM;
+			iov.iov_len = 1;
+			goto send_msg;
 		}
 		info("received %d/%d bytes from %s", buflen, sizeof(buf),
 		     &sun.sun_path[1]);
@@ -2559,6 +2632,20 @@ void *cli_monitor_thread(void *ctx)
 		}
 		if (!strcmp(event, "NewArray")) {
 			/* No useful information */
+			buf[0] = 0;
+			iov.iov_len = 0;
+			goto send_msg;
+		}
+		if (!strcmp(event, "TestMessage")) {
+			/* No useful information */
+			int n = snprintf(buf, CLI_BUFLEN,
+					 "test message for %s received ok",
+					 md_dev->dev_name);
+			iov.iov_len = (n < CLI_BUFLEN ? n + 1 : CLI_BUFLEN);
+			goto send_msg;
+		}
+		if (!strcmp(event, "DegradedArray")) {
+			check_mirror_status(md_dev);
 			buf[0] = 0;
 			iov.iov_len = 0;
 			goto send_msg;
