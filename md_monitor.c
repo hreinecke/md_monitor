@@ -311,12 +311,18 @@ static void check_mirror_status(struct md_monitor *md_dev)
 	list_for_each_entry(rdev, &md_dev->children, siblings) {
 		int md_status, md_side, md_slot, new_side;
 
+		md_slot = -1;
 		pthread_mutex_lock(&rdev->lock);
 		md_side = rdev->md_side;
 		md_status = md_rdev_check_state(rdev, &md_slot);
 		md_status = md_rdev_update_state(rdev, md_status, md_slot);
 		pthread_mutex_unlock(&rdev->lock);
 
+		if (md_slot < 0) {
+			/* Normal condition for failed disks */
+			dbg("%s: invalid slot %d", rdev->dev_name, md_slot);
+			continue;
+		}
 		new_side = md_slot % (md_dev->layout & 0xFF);
 		if (md_side != new_side)
 			warn("%s: side has changed from %d to %d",
